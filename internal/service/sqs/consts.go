@@ -11,7 +11,7 @@ const (
 	defaultQueueDelaySeconds                  = 0
 	defaultQueueKMSDataKeyReusePeriodSeconds  = 300
 	defaultQueueMaximumMessageSize            = 1_048_576 // 1 MiB.
-	defaultQueueMessageRetentionPeriod        = 345_600 // 4 days.
+	defaultQueueMessageRetentionPeriod        = 345_600   // 4 days.
 	defaultQueueReceiveMessageWaitTimeSeconds = 0
 	defaultQueueVisibilityTimeout             = 30
 )
