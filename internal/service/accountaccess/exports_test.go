@@ -6,4 +6,5 @@ package accountaccess
 // Exports for use in tests only.
 var (
 	ResourceApplication = newApplicationResource
+	ResourceEntitlement = newEntitlementResource
 )
