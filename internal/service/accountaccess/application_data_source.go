@@ -1,0 +1,211 @@
+// Copyright IBM Corp. 2014, 2026
+// SPDX-License-Identifier: MPL-2.0
+
+package accountaccess
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
+	awstypes "github.com/aws/aws-sdk-go-v2/service/accountaccess/types"
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
+	"github.com/hashicorp/terraform-plugin-framework-validators/datasourcevalidator"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-provider-aws/internal/framework"
+	fwflex "github.com/hashicorp/terraform-provider-aws/internal/framework/flex"
+	fwtypes "github.com/hashicorp/terraform-provider-aws/internal/framework/types"
+	tftags "github.com/hashicorp/terraform-provider-aws/internal/tags"
+	"github.com/hashicorp/terraform-provider-aws/names"
+)
+
+// @FrameworkDataSource("aws_accountaccess_application", name="Application")
+func newApplicationDataSource(_ context.Context) (datasource.DataSourceWithConfigure, error) {
+	return &applicationDataSource{}, nil
+}
+
+type applicationDataSource struct {
+	framework.DataSourceWithModel[applicationDataSourceModel]
+}
+
+func (d *applicationDataSource) ConfigValidators(ctx context.Context) []datasource.ConfigValidator {
+	return []datasource.ConfigValidator{
+		// Exactly one lookup attribute may be set.
+		datasourcevalidator.ExactlyOneOf(
+			path.MatchRoot(names.AttrARN),
+			path.MatchRoot("identity_center_instance_arn"),
+		),
+	}
+}
+
+func (d *applicationDataSource) Schema(ctx context.Context, request datasource.SchemaRequest, response *datasource.SchemaResponse) {
+	response.Schema = schema.Schema{
+		Attributes: map[string]schema.Attribute{
+			names.AttrARN: schema.StringAttribute{
+				CustomType: fwtypes.ARNType,
+				Optional:   true,
+				Computed:   true,
+			},
+			names.AttrCreatedAt: schema.StringAttribute{
+				CustomType: timetypes.RFC3339Type{},
+				Computed:   true,
+			},
+			"identity_center_application_arn": schema.StringAttribute{
+				CustomType: fwtypes.ARNType,
+				Computed:   true,
+			},
+			"identity_center_instance_arn": schema.StringAttribute{
+				CustomType: fwtypes.ARNType,
+				Optional:   true,
+				Computed:   true,
+			},
+			names.AttrID: schema.StringAttribute{
+				Computed: true,
+			},
+			names.AttrStatus: schema.StringAttribute{
+				CustomType: fwtypes.StringEnumType[awstypes.Status](),
+				Computed:   true,
+			},
+			names.AttrTags: tftags.TagsAttributeComputedOnly(),
+			"tenant_id": schema.StringAttribute{
+				Computed: true,
+			},
+			"updated_at": schema.StringAttribute{
+				CustomType: timetypes.RFC3339Type{},
+				Computed:   true,
+			},
+		},
+	}
+}
+
+func (d *applicationDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
+	var data applicationDataSourceModel
+	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
+	if response.Diagnostics.HasError() {
+		return
+	}
+
+	conn := d.Meta().AccountAccessClient(ctx)
+
+	var (
+		arn string
+		app *accountaccess.GetApplicationOutput
+		err error
+	)
+
+	switch {
+	case !data.ARN.IsNull():
+		arn = data.ARN.ValueString()
+		app, err = FindApplicationByARN(ctx, conn, arn)
+	case !data.IdentityCenterInstanceARN.IsNull():
+		instanceArn := data.IdentityCenterInstanceARN.ValueString()
+		app, err = findApplicationByIdentityCenterInstance(ctx, conn, instanceArn)
+		if err == nil && app != nil {
+			// We don't have the ARN yet (Get response doesn't echo it back). Resolve via list summary.
+			arn, err = findApplicationARNByIdentityCenterInstance(ctx, conn, instanceArn)
+		}
+	}
+
+	if err != nil {
+		response.Diagnostics.AddError("reading Account Access Application", err.Error())
+		return
+	}
+	if app == nil || arn == "" {
+		response.Diagnostics.AddError(
+			"reading Account Access Application: not found",
+			"no Application matched the supplied lookup attributes",
+		)
+		return
+	}
+
+	data.ARN = fwtypes.ARNValue(arn)
+	data.ID = types.StringValue(arn)
+	data.Status = fwtypes.StringEnumValue(app.Status)
+	data.TenantID = fwflex.StringToFramework(ctx, app.TenantId)
+	data.CreatedAt = timetypes.NewRFC3339TimeValue(aws.ToTime(app.CreatedAt))
+	data.UpdatedAt = timetypes.NewRFC3339TimeValue(aws.ToTime(app.UpdatedAt))
+
+	if details, ok := app.IdentitySource.(*awstypes.IdentitySourceDetailsMemberIdentityCenter); ok {
+		if details.Value.InstanceArn != nil {
+			data.IdentityCenterInstanceARN = fwtypes.ARNValue(aws.ToString(details.Value.InstanceArn))
+		}
+		if details.Value.ApplicationArn != nil {
+			data.IdentityCenterApplicationARN = fwtypes.ARNValue(aws.ToString(details.Value.ApplicationArn))
+		} else {
+			data.IdentityCenterApplicationARN = fwtypes.ARNNull()
+		}
+	}
+
+	// Tags via the @Tags annotation come through transparent tagging; populate
+	// the data source's Tags from the API response directly so the data source
+	// returns the live values.
+	data.Tags = tftags.FlattenStringValueMap(ctx, app.Tags)
+
+	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+}
+
+// findApplicationByIdentityCenterInstance walks ListApplications looking for
+// the (one) Application bound to the given IdC instance ARN. Per the spec
+// there is at most one Application per IdC instance.
+func findApplicationByIdentityCenterInstance(ctx context.Context, conn *accountaccess.Client, instanceArn string) (*accountaccess.GetApplicationOutput, error) {
+	arn, err := findApplicationARNByIdentityCenterInstance(ctx, conn, instanceArn)
+	if err != nil {
+		return nil, err
+	}
+	if arn == "" {
+		return nil, fmt.Errorf("no Application bound to IdC instance %q", instanceArn)
+	}
+	return FindApplicationByARN(ctx, conn, arn)
+}
+
+// findApplicationARNByIdentityCenterInstance pages through ListApplications and
+// matches each summary's IdC instance against the requested ARN. The
+// ApplicationSummary in the spec doesn't include the IdC instance directly, so
+// each candidate must be GetApplication'd to confirm. With one Application per
+// instance, hits are quick.
+func findApplicationARNByIdentityCenterInstance(ctx context.Context, conn *accountaccess.Client, instanceArn string) (string, error) {
+	var nextToken *string
+	for {
+		out, err := conn.ListApplications(ctx, &accountaccess.ListApplicationsInput{NextToken: nextToken})
+		if err != nil {
+			return "", err
+		}
+		for _, summary := range out.Applications {
+			if summary.ApplicationArn == nil {
+				continue
+			}
+			app, err := FindApplicationByARN(ctx, conn, aws.ToString(summary.ApplicationArn))
+			if err != nil {
+				return "", err
+			}
+			details, ok := app.IdentitySource.(*awstypes.IdentitySourceDetailsMemberIdentityCenter)
+			if !ok || details.Value.InstanceArn == nil {
+				continue
+			}
+			if aws.ToString(details.Value.InstanceArn) == instanceArn {
+				return aws.ToString(summary.ApplicationArn), nil
+			}
+		}
+		if out.NextToken == nil {
+			return "", nil
+		}
+		nextToken = out.NextToken
+	}
+}
+
+type applicationDataSourceModel struct {
+	framework.WithRegionModel
+	ARN                          fwtypes.ARN                         `tfsdk:"arn"`
+	CreatedAt                    timetypes.RFC3339                   `tfsdk:"created_at"`
+	ID                           types.String                        `tfsdk:"id"`
+	IdentityCenterApplicationARN fwtypes.ARN                         `tfsdk:"identity_center_application_arn"`
+	IdentityCenterInstanceARN    fwtypes.ARN                         `tfsdk:"identity_center_instance_arn"`
+	Status                       fwtypes.StringEnum[awstypes.Status] `tfsdk:"status"`
+	Tags                         tftags.Map                          `tfsdk:"tags"`
+	TenantID                     types.String                        `tfsdk:"tenant_id"`
+	UpdatedAt                    timetypes.RFC3339                   `tfsdk:"updated_at"`
+}
