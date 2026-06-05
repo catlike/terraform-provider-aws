@@ -87,6 +87,7 @@ provider "aws" {
 |-------|------------------|-------------------------------|------------------------------------|
 |IAM Access Analyzer|`accessanalyzer`|`AWS_ENDPOINT_URL_ACCESSANALYZER`|`accessanalyzer`|
 |Account Management|`account`|`AWS_ENDPOINT_URL_ACCOUNT`|`account`|
+|Account Access|`accountaccess`|`AWS_ENDPOINT_URL_ACCOUNTACCESS`|`accountaccess`|
 |ACM (Certificate Manager)|`acm`|`AWS_ENDPOINT_URL_ACM`|`acm`|
 |ACM PCA (Certificate Manager Private Certificate Authority)|`acmpca`|`AWS_ENDPOINT_URL_ACM_PCA`|`acm_pca`|
 |AMP (Managed Prometheus)|`amp`(or `prometheus` or `prometheusservice`)|`AWS_ENDPOINT_URL_AMP`|`amp`|
