@@ -7,6 +7,7 @@ package sweep_test
 
 import (
 	"github.com/hashicorp/terraform-provider-aws/internal/service/accessanalyzer"
+	"github.com/hashicorp/terraform-provider-aws/internal/service/accountaccess"
 	"github.com/hashicorp/terraform-provider-aws/internal/service/acm"
 	"github.com/hashicorp/terraform-provider-aws/internal/service/acmpca"
 	"github.com/hashicorp/terraform-provider-aws/internal/service/amp"
@@ -201,6 +202,7 @@ import (
 
 func registerSweepers() {
 	accessanalyzer.RegisterSweepers()
+	accountaccess.RegisterSweepers()
 	acm.RegisterSweepers()
 	acmpca.RegisterSweepers()
 	amp.RegisterSweepers()
