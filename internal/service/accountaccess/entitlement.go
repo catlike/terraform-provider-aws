@@ -324,14 +324,14 @@ func (entitlementImportID) Parse(id string) (string, map[string]any, error) {
 // Account Access Entitlement.
 type entitlementResourceModel struct {
 	framework.WithRegionModel
-	AccountID      types.String                       `tfsdk:"account_id"`
-	AccountName    types.String                       `tfsdk:"account_name"`
-	ApplicationARN fwtypes.ARN                        `tfsdk:"application_arn"`
-	CreatedAt      timetypes.RFC3339                  `tfsdk:"created_at"`
-	EntitlementID  types.String                       `tfsdk:"entitlement_id"`
-	ID             types.String                       `tfsdk:"id"`
-	PrincipalID    types.String                       `tfsdk:"principal_id"`
-	PrincipalType  fwtypes.StringEnum[principalType]  `tfsdk:"principal_type"`
-	RoleARN        fwtypes.ARN                        `tfsdk:"role_arn"`
-	Timeouts       timeouts.Value                     `tfsdk:"timeouts"`
+	AccountID      types.String                      `tfsdk:"account_id"`
+	AccountName    types.String                      `tfsdk:"account_name"`
+	ApplicationARN fwtypes.ARN                       `tfsdk:"application_arn"`
+	CreatedAt      timetypes.RFC3339                 `tfsdk:"created_at"`
+	EntitlementID  types.String                      `tfsdk:"entitlement_id"`
+	ID             types.String                      `tfsdk:"id"`
+	PrincipalID    types.String                      `tfsdk:"principal_id"`
+	PrincipalType  fwtypes.StringEnum[principalType] `tfsdk:"principal_type"`
+	RoleARN        fwtypes.ARN                       `tfsdk:"role_arn"`
+	Timeouts       timeouts.Value                    `tfsdk:"timeouts"`
 }

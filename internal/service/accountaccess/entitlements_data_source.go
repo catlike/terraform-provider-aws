@@ -173,13 +173,13 @@ func flattenEntitlementSummary(ctx context.Context, summary awstypes.Entitlement
 
 type entitlementsDataSourceModel struct {
 	framework.WithRegionModel
-	AccountID      types.String                                                       `tfsdk:"account_id"`
-	ApplicationARN fwtypes.ARN                                                        `tfsdk:"application_arn"`
-	Entitlements   fwtypes.ListNestedObjectValueOf[entitlementsDataSourceItemModel]   `tfsdk:"entitlements"`
-	ID             types.String                                                       `tfsdk:"id"`
-	PrincipalID    types.String                                                       `tfsdk:"principal_id"`
-	PrincipalType  fwtypes.StringEnum[principalType]                                  `tfsdk:"principal_type"`
-	RoleARN        fwtypes.ARN                                                        `tfsdk:"role_arn"`
+	AccountID      types.String                                                     `tfsdk:"account_id"`
+	ApplicationARN fwtypes.ARN                                                      `tfsdk:"application_arn"`
+	Entitlements   fwtypes.ListNestedObjectValueOf[entitlementsDataSourceItemModel] `tfsdk:"entitlements"`
+	ID             types.String                                                     `tfsdk:"id"`
+	PrincipalID    types.String                                                     `tfsdk:"principal_id"`
+	PrincipalType  fwtypes.StringEnum[principalType]                                `tfsdk:"principal_type"`
+	RoleARN        fwtypes.ARN                                                      `tfsdk:"role_arn"`
 }
 
 type entitlementsDataSourceItemModel struct {
