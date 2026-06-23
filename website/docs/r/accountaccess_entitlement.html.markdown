@@ -12,6 +12,8 @@ Manages an AWS Account Access Entitlement. An Entitlement grants an IAM Identity
 
 ~> **Note:** Entitlements are immutable. Changing `principal_id`, `principal_type`, `role_arn`, or `application_arn` triggers replacement.
 
+~> **Note:** The IAM role referenced by `role_arn` must have a trust policy that allows the Account Access service to assume it. The role's `assume_role_policy` must grant `sts:AssumeRole`, `sts:SetContext`, and `sts:TagSession` to the `account-access-preview.amazonaws.com` service principal. Without `sts:TagSession`, credential retrieval for the entitlement fails. See the [Complete Example](#complete-example) below.
+
 ## Example Usage
 
 ### User Principal
@@ -39,6 +41,48 @@ resource "aws_accountaccess_entitlement" "engineering" {
   principal_id    = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
   principal_type  = "GROUP"
   role_arn        = "arn:aws:iam::123456789012:role/Engineering"
+}
+```
+
+### Complete Example
+
+The target IAM role must trust the Account Access service. This example provisions a role with the required trust policy and grants an entitlement to it.
+
+```terraform
+data "aws_ssoadmin_instances" "example" {}
+
+resource "aws_accountaccess_application" "example" {
+  identity_center_instance_arn = tolist(data.aws_ssoadmin_instances.example.arns)[0]
+}
+
+# The target role must allow the Account Access service to assume it.
+# sts:TagSession is required for credential retrieval to succeed.
+resource "aws_iam_role" "target" {
+  name = "account-access-developer"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "account-access-preview.amazonaws.com"
+        }
+        Action = [
+          "sts:AssumeRole",
+          "sts:SetContext",
+          "sts:TagSession",
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_accountaccess_entitlement" "example" {
+  application_arn = aws_accountaccess_application.example.arn
+  principal_id    = "11111111-2222-3333-4444-555555555555"
+  principal_type  = "USER"
+  role_arn        = aws_iam_role.target.arn
 }
 ```
 
