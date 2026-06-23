@@ -13,24 +13,23 @@ import (
 
 func TestAccAccountAccessApplicationDataSource_byInstance(t *testing.T) {
 	ctx := acctest.Context(t)
-	if testing.Short() {
-		t.Skip("skipping long-running test in short mode")
-	}
-	acctest.SkipIfEnvVarNotSet(t, envVarApplicationArn) // proxy: same env-var bundle indicates a configured test account
 
 	dataSourceName := "data.aws_accountaccess_application.test"
 	resourceName := "aws_accountaccess_application.test"
+	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
 
 	acctest.Test(ctx, t, resource.TestCase{
 		PreCheck: func() {
 			acctest.PreCheck(ctx, t)
+			testAccPreCheckRegion(t)
 			testAccPreCheck(ctx, t)
 		},
 		ErrorCheck:               acctest.ErrorCheck(t, names.AccountAccessServiceID),
 		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckApplicationDestroy(ctx, t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccApplicationDataSourceConfig_byInstance(),
+				Config: testAccApplicationDataSourceConfig_byInstance(rName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrPair(dataSourceName, names.AttrARN, resourceName, names.AttrARN),
 					resource.TestCheckResourceAttrPair(dataSourceName, "identity_center_instance_arn", resourceName, "identity_center_instance_arn"),
@@ -41,19 +40,46 @@ func TestAccAccountAccessApplicationDataSource_byInstance(t *testing.T) {
 	})
 }
 
-func testAccApplicationDataSourceConfig_byInstance() string {
-	return `
-variable "identity_center_instance_arn" {
-  type     = string
-  nullable = false
+func TestAccAccountAccessApplicationDataSource_byARN(t *testing.T) {
+	ctx := acctest.Context(t)
+
+	dataSourceName := "data.aws_accountaccess_application.test"
+	resourceName := "aws_accountaccess_application.test"
+	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
+
+	acctest.Test(ctx, t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			testAccPreCheckRegion(t)
+			testAccPreCheck(ctx, t)
+		},
+		ErrorCheck:               acctest.ErrorCheck(t, names.AccountAccessServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckApplicationDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccApplicationDataSourceConfig_byARN(rName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair(dataSourceName, names.AttrARN, resourceName, names.AttrARN),
+					resource.TestCheckResourceAttrPair(dataSourceName, "tenant_id", resourceName, "tenant_id"),
+				),
+			},
+		},
+	})
 }
 
-resource "aws_accountaccess_application" "test" {
-  identity_center_instance_arn = var.identity_center_instance_arn
-}
-
+func testAccApplicationDataSourceConfig_byInstance(rName string) string {
+	return acctest.ConfigCompose(testAccApplicationConfig_basic(rName), `
 data "aws_accountaccess_application" "test" {
   identity_center_instance_arn = aws_accountaccess_application.test.identity_center_instance_arn
 }
-`
+`)
+}
+
+func testAccApplicationDataSourceConfig_byARN(rName string) string {
+	return acctest.ConfigCompose(testAccApplicationConfig_basic(rName), `
+data "aws_accountaccess_application" "test" {
+  arn = aws_accountaccess_application.test.arn
+}
+`)
 }

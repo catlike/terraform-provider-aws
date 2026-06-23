@@ -13,7 +13,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
-	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 	"github.com/hashicorp/terraform-provider-aws/internal/retry"
 	tfaccountaccess "github.com/hashicorp/terraform-provider-aws/internal/service/accountaccess"
 	"github.com/hashicorp/terraform-provider-aws/names"
@@ -21,16 +20,15 @@ import (
 
 func TestAccAccountAccessApplication_basic(t *testing.T) {
 	ctx := acctest.Context(t)
-	if testing.Short() {
-		t.Skip("skipping long-running test in short mode")
-	}
 
 	var v accountaccess.GetApplicationOutput
 	resourceName := "aws_accountaccess_application.test"
+	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
 
 	acctest.Test(ctx, t, resource.TestCase{
 		PreCheck: func() {
 			acctest.PreCheck(ctx, t)
+			testAccPreCheckRegion(t)
 			testAccPreCheck(ctx, t)
 		},
 		ErrorCheck:               acctest.ErrorCheck(t, names.AccountAccessServiceID),
@@ -38,7 +36,7 @@ func TestAccAccountAccessApplication_basic(t *testing.T) {
 		CheckDestroy:             testAccCheckApplicationDestroy(ctx, t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccApplicationConfig_basic(),
+				Config: testAccApplicationConfig_basic(rName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckApplicationExists(ctx, t, resourceName, &v),
 					resource.TestCheckResourceAttrSet(resourceName, names.AttrARN),
@@ -57,16 +55,15 @@ func TestAccAccountAccessApplication_basic(t *testing.T) {
 
 func TestAccAccountAccessApplication_disappears(t *testing.T) {
 	ctx := acctest.Context(t)
-	if testing.Short() {
-		t.Skip("skipping long-running test in short mode")
-	}
 
 	var v accountaccess.GetApplicationOutput
 	resourceName := "aws_accountaccess_application.test"
+	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
 
 	acctest.Test(ctx, t, resource.TestCase{
 		PreCheck: func() {
 			acctest.PreCheck(ctx, t)
+			testAccPreCheckRegion(t)
 			testAccPreCheck(ctx, t)
 		},
 		ErrorCheck:               acctest.ErrorCheck(t, names.AccountAccessServiceID),
@@ -74,7 +71,7 @@ func TestAccAccountAccessApplication_disappears(t *testing.T) {
 		CheckDestroy:             testAccCheckApplicationDestroy(ctx, t),
 		Steps: []resource.TestStep{
 			{
-				Config: testAccApplicationConfig_basic(),
+				Config: testAccApplicationConfig_basic(rName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckApplicationExists(ctx, t, resourceName, &v),
 					acctest.CheckFrameworkResourceDisappears(ctx, t, tfaccountaccess.ResourceApplication, resourceName),
@@ -132,23 +129,10 @@ func testAccCheckApplicationExists(ctx context.Context, t *testing.T, n string, 
 	}
 }
 
-// testAccApplicationConfig_basic returns the HCL for a minimum viable
-// Application. The Identity Center instance ARN is read from a variable so
-// tests can be wired up against the test account's IdC instance via
-// `TF_VAR_identity_center_instance_arn` or the standard test data dir.
-func testAccApplicationConfig_basic() string {
-	return `
-variable "identity_center_instance_arn" {
-  type     = string
-  nullable = false
-}
-
+func testAccApplicationConfig_basic(rName string) string {
+	return acctest.ConfigCompose(testAccPrerequisitesConfig(rName), `
 resource "aws_accountaccess_application" "test" {
-  identity_center_instance_arn = var.identity_center_instance_arn
+  identity_center_instance_arn = local.instance_arn
 }
-`
+`)
 }
-
-// _ unused-import guards so future helpers that use these don't trip the
-// linter when this file is the only consumer in the package.
-var _ = conns.AWSClient{}
