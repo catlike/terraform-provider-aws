@@ -48,6 +48,9 @@ func TestAccAccountAccessEntitlement_user(t *testing.T) {
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
+				// account_name is server-resolved with eventual consistency
+				// (empty immediately after create, populated by import time).
+				ImportStateVerifyIgnore: []string{"account_name"},
 			},
 		},
 	})
@@ -81,6 +84,9 @@ func TestAccAccountAccessEntitlement_group(t *testing.T) {
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
+				// account_name is server-resolved with eventual consistency
+				// (empty immediately after create, populated by import time).
+				ImportStateVerifyIgnore: []string{"account_name"},
 			},
 		},
 	})

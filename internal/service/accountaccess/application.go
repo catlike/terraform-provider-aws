@@ -34,7 +34,7 @@ import (
 
 // @FrameworkResource("aws_accountaccess_application", name="Application")
 // @Tags(identifierAttribute="arn")
-// @ArnIdentity
+// @ArnIdentity(identityDuplicateAttributes="id")
 // @Testing(existsType="github.com/aws/aws-sdk-go-v2/service/accountaccess;accountaccess.GetApplicationOutput")
 // @Testing(hasNoPreExistingResource=true)
 func newApplicationResource(_ context.Context) (resource.ResourceWithConfigure, error) {
@@ -96,6 +96,14 @@ func (r *applicationResource) Schema(ctx context.Context, request resource.Schem
 			"updated_at": schema.StringAttribute{
 				CustomType: timetypes.RFC3339Type{},
 				Computed:   true,
+				// Keep the prior value on tag-only updates (transparent tagging
+				// uses a no-op Update that doesn't refresh computed fields);
+				// the next refresh picks up the new server timestamp. Without
+				// this, an in-place tag update leaves updated_at unknown after
+				// apply, which the framework rejects.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 		},
 		Blocks: map[string]schema.Block{
@@ -204,7 +212,7 @@ func (r *applicationResource) Delete(ctx context.Context, request resource.Delet
 	_, err := conn.DeleteApplication(ctx, &accountaccess.DeleteApplicationInput{
 		ApplicationArn: aws.String(state.ARN.ValueString()),
 	})
-	if errs.IsA[*awstypes.ResourceNotFoundException](err) {
+	if isNotFoundError(err) {
 		return
 	}
 	if err != nil {
@@ -251,7 +259,7 @@ func FindApplicationByARN(ctx context.Context, conn *accountaccess.Client, arn s
 	output, err := conn.GetApplication(ctx, &accountaccess.GetApplicationInput{
 		ApplicationArn: aws.String(arn),
 	})
-	if errs.IsA[*awstypes.ResourceNotFoundException](err) {
+	if isNotFoundError(err) {
 		return nil, &retry.NotFoundError{LastError: err}
 	}
 	if err != nil {

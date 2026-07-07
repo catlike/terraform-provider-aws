@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
+	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -46,6 +47,7 @@ func TestAccAccountAccessApplication_Identity_basic(t *testing.T) {
 					testAccCheckApplicationExists(ctx, t, resourceName, &v),
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.CompareValuePairs(resourceName, tfjsonpath.New(names.AttrID), resourceName, tfjsonpath.New(names.AttrARN), compare.ValuesSame()),
 					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.Region())),
 					statecheck.ExpectIdentity(resourceName, map[string]knownvalue.Check{
 						names.AttrARN: knownvalue.NotNull(),
@@ -60,12 +62,10 @@ func TestAccAccountAccessApplication_Identity_basic(t *testing.T) {
 				ConfigVariables: config.Variables{
 					acctest.CtRName: config.StringVariable(rName),
 				},
-				ImportStateKind:                      resource.ImportCommandWithID,
-				ImportStateIdFunc:                    acctest.AttrImportStateIdFunc(resourceName, names.AttrARN),
-				ResourceName:                         resourceName,
-				ImportState:                          true,
-				ImportStateVerify:                    true,
-				ImportStateVerifyIdentifierAttribute: names.AttrARN,
+				ImportStateKind:   resource.ImportCommandWithID,
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 
 			// Step 3: Import block with Import ID
@@ -74,13 +74,13 @@ func TestAccAccountAccessApplication_Identity_basic(t *testing.T) {
 				ConfigVariables: config.Variables{
 					acctest.CtRName: config.StringVariable(rName),
 				},
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateKind:   resource.ImportBlockWithID,
-				ImportStateIdFunc: acctest.AttrImportStateIdFunc(resourceName, names.AttrARN),
+				ResourceName:    resourceName,
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithID,
 				ImportPlanChecks: resource.ImportPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.Region())),
 					},
 				},
@@ -98,6 +98,7 @@ func TestAccAccountAccessApplication_Identity_basic(t *testing.T) {
 				ImportPlanChecks: resource.ImportPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.Region())),
 					},
 				},
@@ -129,6 +130,7 @@ func TestAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
 					"region":        config.StringVariable(acctest.AlternateRegion()),
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.CompareValuePairs(resourceName, tfjsonpath.New(names.AttrID), resourceName, tfjsonpath.New(names.AttrARN), compare.ValuesSame()),
 					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
 					statecheck.ExpectIdentity(resourceName, map[string]knownvalue.Check{
 						names.AttrARN: knownvalue.NotNull(),
@@ -144,12 +146,11 @@ func TestAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
 					acctest.CtRName: config.StringVariable(rName),
 					"region":        config.StringVariable(acctest.AlternateRegion()),
 				},
-				ImportStateKind:                      resource.ImportCommandWithID,
-				ImportStateIdFunc:                    acctest.CrossRegionAttrImportStateIdFunc(resourceName, names.AttrARN),
-				ResourceName:                         resourceName,
-				ImportState:                          true,
-				ImportStateVerify:                    true,
-				ImportStateVerifyIdentifierAttribute: names.AttrARN,
+				ImportStateKind:   resource.ImportCommandWithID,
+				ImportStateIdFunc: acctest.CrossRegionImportStateIdFunc(resourceName),
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 
 			// Step 3: Import command without appended "@<region>"
@@ -159,12 +160,10 @@ func TestAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
 					acctest.CtRName: config.StringVariable(rName),
 					"region":        config.StringVariable(acctest.AlternateRegion()),
 				},
-				ImportStateKind:                      resource.ImportCommandWithID,
-				ImportStateIdFunc:                    acctest.AttrImportStateIdFunc(resourceName, names.AttrARN),
-				ResourceName:                         resourceName,
-				ImportState:                          true,
-				ImportStateVerify:                    true,
-				ImportStateVerifyIdentifierAttribute: names.AttrARN,
+				ImportStateKind:   resource.ImportCommandWithID,
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 
 			// Step 4: Import block with Import ID and appended "@<region>"
@@ -177,10 +176,11 @@ func TestAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateKind:   resource.ImportBlockWithID,
-				ImportStateIdFunc: acctest.CrossRegionAttrImportStateIdFunc(resourceName, names.AttrARN),
+				ImportStateIdFunc: acctest.CrossRegionImportStateIdFunc(resourceName),
 				ImportPlanChecks: resource.ImportPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
 					},
 				},
@@ -193,13 +193,13 @@ func TestAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
 					acctest.CtRName: config.StringVariable(rName),
 					"region":        config.StringVariable(acctest.AlternateRegion()),
 				},
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateKind:   resource.ImportBlockWithID,
-				ImportStateIdFunc: acctest.AttrImportStateIdFunc(resourceName, names.AttrARN),
+				ResourceName:    resourceName,
+				ImportState:     true,
+				ImportStateKind: resource.ImportBlockWithID,
 				ImportPlanChecks: resource.ImportPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
 					},
 				},
@@ -218,6 +218,7 @@ func TestAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
 				ImportPlanChecks: resource.ImportPlanChecks{
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
 					},
 				},

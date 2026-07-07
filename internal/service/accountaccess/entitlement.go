@@ -19,7 +19,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-provider-aws/internal/errs"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs/fwdiag"
 	intflex "github.com/hashicorp/terraform-provider-aws/internal/flex"
 	"github.com/hashicorp/terraform-provider-aws/internal/framework"
@@ -230,7 +229,7 @@ func (r *entitlementResource) Delete(ctx context.Context, request resource.Delet
 		ApplicationArn: aws.String(state.ApplicationARN.ValueString()),
 		EntitlementId:  aws.String(state.EntitlementID.ValueString()),
 	})
-	if errs.IsA[*awstypes.ResourceNotFoundException](err) {
+	if isNotFoundError(err) {
 		return
 	}
 	if err != nil {
@@ -282,7 +281,7 @@ func FindEntitlementByTwoPartKey(ctx context.Context, conn *accountaccess.Client
 		ApplicationArn: aws.String(applicationArn),
 		EntitlementId:  aws.String(entitlementID),
 	})
-	if errs.IsA[*awstypes.ResourceNotFoundException](err) {
+	if isNotFoundError(err) {
 		return nil, &retry.NotFoundError{LastError: err}
 	}
 	if err != nil {
