@@ -51,5 +51,5 @@ resource "aws_accountaccess_entitlement" "test" {
   principal_id    = aws_identitystore_user.test.user_id
   principal_type  = "USER"
   role_arn        = aws_iam_role.test.arn
-{{- template "region" -}}
+{{- template "region" }}
 }

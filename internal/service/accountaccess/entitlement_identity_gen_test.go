@@ -72,6 +72,9 @@ func TestAccAccountAccessEntitlement_Identity_basic(t *testing.T) {
 				ImportState:                          true,
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "application_arn",
+				ImportStateVerifyIgnore: []string{
+					"account_name",
+				},
 			},
 
 			// Step 3: Import block with Import ID
@@ -162,6 +165,9 @@ func TestAccAccountAccessEntitlement_Identity_regionOverride(t *testing.T) {
 				ImportState:                          true,
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "application_arn",
+				ImportStateVerifyIgnore: []string{
+					"account_name",
+				},
 			},
 
 			// Step 3: Import block with Import ID

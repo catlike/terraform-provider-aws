@@ -53,7 +53,8 @@ resource "aws_accountaccess_entitlement" "test" {
   application_arn = aws_accountaccess_application.test.arn
   principal_id    = aws_identitystore_user.test.user_id
   principal_type  = "USER"
-  role_arn        = aws_iam_role.test.arn}
+  role_arn        = aws_iam_role.test.arn
+}
 
 variable "rName" {
   description = "Name for resource"

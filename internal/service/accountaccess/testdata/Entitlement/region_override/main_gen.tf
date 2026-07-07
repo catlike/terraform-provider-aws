@@ -55,6 +55,7 @@ resource "aws_accountaccess_entitlement" "test" {
   principal_type  = "USER"
   role_arn        = aws_iam_role.test.arn
   region = var.region
+
 }
 
 variable "rName" {

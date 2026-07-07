@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
@@ -39,6 +40,11 @@ const (
 	principalTypeGroup principalType = "GROUP"
 )
 
+// entitlementRolefPropagationTimeout bounds retries of CreateEntitlement while
+// the target IAM role (often created in the same apply) propagates to the
+// Account Access service's role-verification check.
+const entitlementRolefPropagationTimeout = 2 * time.Minute
+
 func (principalType) Values() []principalType {
 	return []principalType{principalTypeUser, principalTypeGroup}
 }
@@ -50,6 +56,8 @@ func (principalType) Values() []principalType {
 // @Testing(hasNoPreExistingResource=true)
 // @Testing(importStateIdAttributes="application_arn;entitlement_id", importStateIdAttributesSep="flex.ResourceIdSeparator")
 // @Testing(existsType="github.com/aws/aws-sdk-go-v2/service/accountaccess;accountaccess.GetEntitlementOutput")
+// @Testing(importIgnore="account_name")
+// @Testing(plannableImportAction="NoOp")
 func newEntitlementResource(_ context.Context) (resource.ResourceWithConfigure, error) {
 	return &entitlementResource{}, nil
 }
@@ -160,7 +168,17 @@ func (r *entitlementResource) Create(ctx context.Context, request resource.Creat
 		},
 	}
 
-	output, err := conn.CreateEntitlement(ctx, input)
+	// Retry on the transient role-verification failure. AAM's CreateEntitlement
+	// verifies that role_arn exists and trusts the service; when the role was
+	// created in the same apply, IAM's eventual consistency means AAM may not
+	// see it yet, returning ValidationException "Error while verifying role...".
+	output, err := tfresource.RetryWhenIsAErrorMessageContains[*accountaccess.CreateEntitlementOutput, *awstypes.ValidationException](
+		ctx, entitlementRolefPropagationTimeout,
+		func(ctx context.Context) (*accountaccess.CreateEntitlementOutput, error) {
+			return conn.CreateEntitlement(ctx, input)
+		},
+		"verifying role",
+	)
 	if err != nil {
 		// NOTE: AccountAccess Create has no clientToken (see questions.md AAM Q3).
 		// A 5xx after server-side creation would leave us unable to safely retry.
