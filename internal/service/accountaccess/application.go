@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/YakDriver/smarterr"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/accountaccess/types"
@@ -150,6 +151,10 @@ func (r *applicationResource) Create(ctx context.Context, request resource.Creat
 		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, plan.IdentityCenterInstanceARN.ValueString())
 		return
 	}
+	if output == nil || output.ApplicationArn == nil {
+		smerr.AddError(ctx, &response.Diagnostics, errors.New("empty output"), smerr.ID, plan.IdentityCenterInstanceARN.ValueString())
+		return
+	}
 
 	plan.ARN = fwflex.StringToFramework(ctx, output.ApplicationArn)
 	plan.ID = plan.ARN
@@ -248,7 +253,7 @@ func FindApplicationByARN(ctx context.Context, conn *accountaccess.Client, arn s
 		ApplicationArn: aws.String(arn),
 	})
 	if isNotFoundError(err) {
-		return nil, &retry.NotFoundError{LastError: err}
+		return nil, smarterr.NewError(&retry.NotFoundError{LastError: err})
 	}
 	if err != nil {
 		return nil, err
