@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/accountaccess/types"
-	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -40,10 +39,11 @@ const (
 	principalTypeGroup principalType = "GROUP"
 )
 
-// entitlementRolefPropagationTimeout bounds retries of CreateEntitlement while
-// the target IAM role (often created in the same apply) propagates to the
-// Account Access service's role-verification check.
-const entitlementRolefPropagationTimeout = 2 * time.Minute
+// propagationTimeout bounds retries of CreateEntitlement while the target IAM
+// role (often created in the same apply) propagates to the Account Access
+// service's role-verification check. Two minutes is the provider-standard IAM
+// eventual-consistency timeout.
+const propagationTimeout = 2 * time.Minute
 
 func (principalType) Values() []principalType {
 	return []principalType{principalTypeUser, principalTypeGroup}
@@ -124,12 +124,6 @@ func (r *entitlementResource) Schema(ctx context.Context, request resource.Schem
 				},
 			},
 		},
-		Blocks: map[string]schema.Block{
-			names.AttrTimeouts: timeouts.Block(ctx, timeouts.Opts{
-				Create: true,
-				Delete: true,
-			}),
-		},
 	}
 }
 
@@ -173,7 +167,7 @@ func (r *entitlementResource) Create(ctx context.Context, request resource.Creat
 	// created in the same apply, IAM's eventual consistency means AAM may not
 	// see it yet, returning ValidationException "Error while verifying role...".
 	output, err := tfresource.RetryWhenIsAErrorMessageContains[*accountaccess.CreateEntitlementOutput, *awstypes.ValidationException](
-		ctx, entitlementRolefPropagationTimeout,
+		ctx, propagationTimeout,
 		func(ctx context.Context) (*accountaccess.CreateEntitlementOutput, error) {
 			return conn.CreateEntitlement(ctx, input)
 		},
@@ -350,5 +344,4 @@ type entitlementResourceModel struct {
 	PrincipalID    types.String                      `tfsdk:"principal_id"`
 	PrincipalType  fwtypes.StringEnum[principalType] `tfsdk:"principal_type"`
 	RoleARN        fwtypes.ARN                       `tfsdk:"role_arn"`
-	Timeouts       timeouts.Value                    `tfsdk:"timeouts"`
 }

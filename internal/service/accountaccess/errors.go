@@ -4,10 +4,6 @@
 package accountaccess
 
 import (
-	"errors"
-	"strings"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/accountaccess/types"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs"
 )
@@ -20,12 +16,6 @@ import (
 // ValidationException whose message contains "not found". Treat both as
 // not-found so Read can remove the resource from state and Delete can no-op.
 func isNotFoundError(err error) bool {
-	if errs.IsA[*awstypes.ResourceNotFoundException](err) {
-		return true
-	}
-	var ve *awstypes.ValidationException
-	if errors.As(err, &ve) {
-		return strings.Contains(strings.ToLower(aws.ToString(ve.Message)), "not found")
-	}
-	return false
+	return errs.IsA[*awstypes.ResourceNotFoundException](err) ||
+		errs.IsAErrorMessageContains[*awstypes.ValidationException](err, "not found")
 }
