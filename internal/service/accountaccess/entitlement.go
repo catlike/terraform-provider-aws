@@ -25,6 +25,7 @@ import (
 	fwflex "github.com/hashicorp/terraform-provider-aws/internal/framework/flex"
 	fwtypes "github.com/hashicorp/terraform-provider-aws/internal/framework/types"
 	"github.com/hashicorp/terraform-provider-aws/internal/retry"
+	"github.com/hashicorp/terraform-provider-aws/internal/smerr"
 	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
 	inttypes "github.com/hashicorp/terraform-provider-aws/internal/types"
 	"github.com/hashicorp/terraform-provider-aws/names"
@@ -129,7 +130,7 @@ func (r *entitlementResource) Schema(ctx context.Context, request resource.Schem
 
 func (r *entitlementResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var plan entitlementResourceModel
-	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.Plan.Get(ctx, &plan))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -178,7 +179,7 @@ func (r *entitlementResource) Create(ctx context.Context, request resource.Creat
 		// A 5xx after server-side creation would leave us unable to safely retry.
 		// We surface the error and ask the user to import. Revisit when the
 		// service team confirms recovery semantics or adds clientToken pre-GA.
-		response.Diagnostics.AddError("creating Account Access Entitlement", err.Error())
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, plan.ApplicationARN.ValueString())
 		return
 	}
 
@@ -188,21 +189,18 @@ func (r *entitlementResource) Create(ctx context.Context, request resource.Creat
 	// Read after create to populate computed account_id / account_name.
 	out, err := FindEntitlementByTwoPartKey(ctx, conn, plan.ApplicationARN.ValueString(), plan.EntitlementID.ValueString())
 	if err != nil {
-		response.Diagnostics.AddError(
-			fmt.Sprintf("reading Account Access Entitlement (%s) after create", plan.ID.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, plan.ID.ValueString())
 		return
 	}
 
 	flattenEntitlement(ctx, out, &plan)
 
-	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &plan))
 }
 
 func (r *entitlementResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state entitlementResourceModel
-	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.State.Get(ctx, &state))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -216,21 +214,18 @@ func (r *entitlementResource) Read(ctx context.Context, request resource.ReadReq
 		return
 	}
 	if err != nil {
-		response.Diagnostics.AddError(
-			fmt.Sprintf("reading Account Access Entitlement (%s)", state.ID.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, state.ID.ValueString())
 		return
 	}
 
 	flattenEntitlement(ctx, out, &state)
 
-	response.Diagnostics.Append(response.State.Set(ctx, &state)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &state))
 }
 
 func (r *entitlementResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state entitlementResourceModel
-	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.State.Get(ctx, &state))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -245,10 +240,7 @@ func (r *entitlementResource) Delete(ctx context.Context, request resource.Delet
 		return
 	}
 	if err != nil {
-		response.Diagnostics.AddError(
-			fmt.Sprintf("deleting Account Access Entitlement (%s)", state.ID.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, state.ID.ValueString())
 		return
 	}
 }

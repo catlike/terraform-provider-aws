@@ -6,7 +6,6 @@ package accountaccess
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,6 +26,7 @@ import (
 	fwflex "github.com/hashicorp/terraform-provider-aws/internal/framework/flex"
 	fwtypes "github.com/hashicorp/terraform-provider-aws/internal/framework/types"
 	"github.com/hashicorp/terraform-provider-aws/internal/retry"
+	"github.com/hashicorp/terraform-provider-aws/internal/smerr"
 	tftags "github.com/hashicorp/terraform-provider-aws/internal/tags"
 	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
 	"github.com/hashicorp/terraform-provider-aws/names"
@@ -117,7 +117,7 @@ func (r *applicationResource) Schema(ctx context.Context, request resource.Schem
 
 func (r *applicationResource) Create(ctx context.Context, request resource.CreateRequest, response *resource.CreateResponse) {
 	var plan applicationResourceModel
-	response.Diagnostics.Append(request.Plan.Get(ctx, &plan)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.Plan.Get(ctx, &plan))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -147,7 +147,7 @@ func (r *applicationResource) Create(ctx context.Context, request resource.Creat
 			)
 			return
 		}
-		response.Diagnostics.AddError("creating Account Access Application", err.Error())
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, plan.IdentityCenterInstanceARN.ValueString())
 		return
 	}
 
@@ -160,21 +160,18 @@ func (r *applicationResource) Create(ctx context.Context, request resource.Creat
 		// next refresh will see the actual state.
 		response.State.SetAttribute(ctx, path.Root(names.AttrID), plan.ID)
 		response.State.SetAttribute(ctx, path.Root(names.AttrARN), plan.ARN)
-		response.Diagnostics.AddError(
-			fmt.Sprintf("waiting for Account Access Application (%s) create", plan.ARN.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, plan.ARN.ValueString())
 		return
 	}
 
 	flattenApplication(ctx, app, &plan)
 
-	response.Diagnostics.Append(response.State.Set(ctx, &plan)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &plan))
 }
 
 func (r *applicationResource) Read(ctx context.Context, request resource.ReadRequest, response *resource.ReadResponse) {
 	var state applicationResourceModel
-	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.State.Get(ctx, &state))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -188,21 +185,18 @@ func (r *applicationResource) Read(ctx context.Context, request resource.ReadReq
 		return
 	}
 	if err != nil {
-		response.Diagnostics.AddError(
-			fmt.Sprintf("reading Account Access Application (%s)", state.ARN.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, state.ARN.ValueString())
 		return
 	}
 
 	flattenApplication(ctx, app, &state)
 
-	response.Diagnostics.Append(response.State.Set(ctx, &state)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &state))
 }
 
 func (r *applicationResource) Delete(ctx context.Context, request resource.DeleteRequest, response *resource.DeleteResponse) {
 	var state applicationResourceModel
-	response.Diagnostics.Append(request.State.Get(ctx, &state)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.State.Get(ctx, &state))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -216,18 +210,12 @@ func (r *applicationResource) Delete(ctx context.Context, request resource.Delet
 		return
 	}
 	if err != nil {
-		response.Diagnostics.AddError(
-			fmt.Sprintf("deleting Account Access Application (%s)", state.ARN.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, state.ARN.ValueString())
 		return
 	}
 
 	if _, err := waitApplicationDeleted(ctx, conn, state.ARN.ValueString(), r.DeleteTimeout(ctx, state.Timeouts)); err != nil {
-		response.Diagnostics.AddError(
-			fmt.Sprintf("waiting for Account Access Application (%s) delete", state.ARN.ValueString()),
-			err.Error(),
-		)
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, state.ARN.ValueString())
 		return
 	}
 }

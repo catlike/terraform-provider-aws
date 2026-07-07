@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/internal/framework"
 	fwflex "github.com/hashicorp/terraform-provider-aws/internal/framework/flex"
 	fwtypes "github.com/hashicorp/terraform-provider-aws/internal/framework/types"
+	"github.com/hashicorp/terraform-provider-aws/internal/smerr"
 	tftags "github.com/hashicorp/terraform-provider-aws/internal/tags"
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
@@ -84,7 +85,7 @@ func (d *applicationDataSource) Schema(ctx context.Context, request datasource.S
 
 func (d *applicationDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var data applicationDataSourceModel
-	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.Config.Get(ctx, &data))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -111,7 +112,7 @@ func (d *applicationDataSource) Read(ctx context.Context, request datasource.Rea
 	}
 
 	if err != nil {
-		response.Diagnostics.AddError("reading Account Access Application", err.Error())
+		smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, data.ARN.ValueString())
 		return
 	}
 	if app == nil || arn == "" {
@@ -145,7 +146,7 @@ func (d *applicationDataSource) Read(ctx context.Context, request datasource.Rea
 	// returns the live values.
 	data.Tags = tftags.FlattenStringValueMap(ctx, app.Tags)
 
-	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &data))
 }
 
 // findApplicationByIdentityCenterInstance walks ListApplications looking for

@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/internal/framework"
 	fwflex "github.com/hashicorp/terraform-provider-aws/internal/framework/flex"
 	fwtypes "github.com/hashicorp/terraform-provider-aws/internal/framework/types"
+	"github.com/hashicorp/terraform-provider-aws/internal/smerr"
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
@@ -78,7 +79,7 @@ func (d *entitlementsDataSource) Schema(ctx context.Context, request datasource.
 
 func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.ReadRequest, response *datasource.ReadResponse) {
 	var data entitlementsDataSourceModel
-	response.Diagnostics.Append(request.Config.Get(ctx, &data)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, request.Config.Get(ctx, &data))
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -114,10 +115,7 @@ func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.Re
 		input.NextToken = nextToken
 		out, err := conn.ListEntitlements(ctx, input)
 		if err != nil {
-			response.Diagnostics.AddError(
-				"listing Account Access Entitlements",
-				err.Error(),
-			)
+			smerr.AddError(ctx, &response.Diagnostics, err, smerr.ID, data.ApplicationARN.ValueString())
 			return
 		}
 		entitlements = append(entitlements, out.Entitlements...)
@@ -138,7 +136,7 @@ func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.Re
 	}
 
 	listValue, listDiags := fwtypes.NewListNestedObjectValueOfValueSlice(ctx, items)
-	response.Diagnostics.Append(listDiags...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, listDiags)
 	if response.Diagnostics.HasError() {
 		return
 	}
@@ -148,7 +146,7 @@ func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.Re
 	// good enough to keep Terraform happy without claiming uniqueness.
 	data.ID = data.ApplicationARN.StringValue
 
-	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
+	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &data))
 }
 
 func flattenEntitlementSummary(ctx context.Context, summary awstypes.EntitlementSummary, model *entitlementsDataSourceItemModel) {
