@@ -6,12 +6,57 @@ package accountaccess_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
 	"github.com/hashicorp/aws-sdk-go-base/v2/endpoints"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 )
+
+// serializeDelay is applied between serialized subtests. Account Access allows
+// only one Application per IAM Identity Center instance, and a test account has
+// a single instance, so every Application-creating test contends for it. The
+// tests must run serially (via TestAccAccountAccess_serial), and a short delay
+// smooths the delete→create transition on the shared instance.
+const serializeDelay = 5 * time.Second
+
+// TestAccAccountAccess_serial runs all Account Access acceptance tests
+// sequentially. This is required because AWS Account Access enforces a 1:1
+// Application-to-Identity-Center-instance constraint (a second CreateApplication
+// against the same instance returns AlreadyCreatedException). Running the tests
+// in parallel — the provider's CI default — would cause nondeterministic
+// AlreadyCreatedException collisions on the single shared org instance, so the
+// individual test functions are unexported and funneled through this one
+// parallel-eligible entry point. Mirrors the upstream AppFabric pattern.
+func TestAccAccountAccess_serial(t *testing.T) {
+	t.Parallel()
+
+	testCases := map[string]map[string]func(t *testing.T){
+		"Application": {
+			acctest.CtBasic:      testAccAccountAccessApplication_basic,
+			acctest.CtDisappears: testAccAccountAccessApplication_disappears,
+			"tags":               testAccAccountAccessApplication_tagsSerial,
+			"Identity":           testAccAccountAccessApplication_identitySerial,
+		},
+		"Entitlement": {
+			"user":               testAccAccountAccessEntitlement_user,
+			"group":              testAccAccountAccessEntitlement_group,
+			acctest.CtDisappears: testAccAccountAccessEntitlement_disappears,
+			"Identity":           testAccAccountAccessEntitlement_identitySerial,
+		},
+		"ApplicationDataSource": {
+			"byInstance": testAccAccountAccessApplicationDataSource_byInstance,
+			"byARN":      testAccAccountAccessApplicationDataSource_byARN,
+		},
+		"EntitlementsDataSource": {
+			"byPrincipal": testAccAccountAccessEntitlementsDataSource_byPrincipal,
+			"byRole":      testAccAccountAccessEntitlementsDataSource_byRole,
+		},
+	}
+
+	acctest.RunSerialTests2Levels(t, testCases, serializeDelay)
+}
 
 // Account Access launches in us-east-1 and us-west-2 only during preview.
 // Tests gate on these via testAccPreCheckRegion.

@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
-func TestAccAccountAccessApplicationDataSource_byInstance(t *testing.T) {
+func testAccAccountAccessApplicationDataSource_byInstance(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	dataSourceName := "data.aws_accountaccess_application.test"
@@ -40,7 +40,7 @@ func TestAccAccountAccessApplicationDataSource_byInstance(t *testing.T) {
 	})
 }
 
-func TestAccAccountAccessApplicationDataSource_byARN(t *testing.T) {
+func testAccAccountAccessApplicationDataSource_byARN(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	dataSourceName := "data.aws_accountaccess_application.test"

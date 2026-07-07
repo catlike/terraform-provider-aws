@@ -61,6 +61,7 @@ func (principalType) Values() []principalType {
 // @Testing(existsType="github.com/aws/aws-sdk-go-v2/service/accountaccess;accountaccess.GetEntitlementOutput")
 // @Testing(importIgnore="account_name")
 // @Testing(plannableImportAction="NoOp")
+// @Testing(serialize=true)
 func newEntitlementResource(_ context.Context) (resource.ResourceWithConfigure, error) {
 	return &entitlementResource{}, nil
 }

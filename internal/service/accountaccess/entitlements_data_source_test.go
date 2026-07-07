@@ -14,7 +14,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
-func TestAccAccountAccessEntitlementsDataSource_byPrincipal(t *testing.T) {
+func testAccAccountAccessEntitlementsDataSource_byPrincipal(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	dataSourceName := "data.aws_accountaccess_entitlements.test"
@@ -40,7 +40,7 @@ func TestAccAccountAccessEntitlementsDataSource_byPrincipal(t *testing.T) {
 	})
 }
 
-func TestAccAccountAccessEntitlementsDataSource_byRole(t *testing.T) {
+func testAccAccountAccessEntitlementsDataSource_byRole(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	dataSourceName := "data.aws_accountaccess_entitlements.test"

@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
-func TestAccAccountAccessEntitlement_user(t *testing.T) {
+func testAccAccountAccessEntitlement_user(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	var v accountaccess.GetEntitlementOutput
@@ -56,7 +56,7 @@ func TestAccAccountAccessEntitlement_user(t *testing.T) {
 	})
 }
 
-func TestAccAccountAccessEntitlement_group(t *testing.T) {
+func testAccAccountAccessEntitlement_group(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	var v accountaccess.GetEntitlementOutput
@@ -92,7 +92,7 @@ func TestAccAccountAccessEntitlement_group(t *testing.T) {
 	})
 }
 
-func TestAccAccountAccessEntitlement_disappears(t *testing.T) {
+func testAccAccountAccessEntitlement_disappears(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	var v accountaccess.GetEntitlementOutput

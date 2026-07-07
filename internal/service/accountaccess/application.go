@@ -37,6 +37,7 @@ import (
 // @Tags(identifierAttribute="arn")
 // @ArnIdentity(identityDuplicateAttributes="id")
 // @Testing(existsType="github.com/aws/aws-sdk-go-v2/service/accountaccess;accountaccess.GetApplicationOutput")
+// @Testing(serialize=true)
 // @Testing(hasNoPreExistingResource=true)
 func newApplicationResource(_ context.Context) (resource.ResourceWithConfigure, error) {
 	r := &applicationResource{}

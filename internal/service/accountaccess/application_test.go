@@ -18,7 +18,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
-func TestAccAccountAccessApplication_basic(t *testing.T) {
+func testAccAccountAccessApplication_basic(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	var v accountaccess.GetApplicationOutput
@@ -53,7 +53,7 @@ func TestAccAccountAccessApplication_basic(t *testing.T) {
 	})
 }
 
-func TestAccAccountAccessApplication_disappears(t *testing.T) {
+func testAccAccountAccessApplication_disappears(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	var v accountaccess.GetApplicationOutput

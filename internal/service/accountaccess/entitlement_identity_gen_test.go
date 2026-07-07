@@ -22,14 +22,25 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
-func TestAccAccountAccessEntitlement_Identity_basic(t *testing.T) {
+func testAccAccountAccessEntitlement_identitySerial(t *testing.T) {
+	t.Helper()
+
+	testCases := map[string]func(t *testing.T){
+		acctest.CtBasic:  testAccAccountAccessEntitlement_Identity_basic,
+		"RegionOverride": testAccAccountAccessEntitlement_Identity_regionOverride,
+	}
+
+	acctest.RunSerialTests1Level(t, testCases, 0)
+}
+
+func testAccAccountAccessEntitlement_Identity_basic(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	var v accountaccess.GetEntitlementOutput
 	resourceName := "aws_accountaccess_entitlement.test"
 	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
 
-	acctest.ParallelTest(ctx, t, resource.TestCase{
+	acctest.Test(ctx, t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
 			tfversion.SkipBelow(tfversion.Version1_12_0),
 		},
@@ -117,13 +128,13 @@ func TestAccAccountAccessEntitlement_Identity_basic(t *testing.T) {
 	})
 }
 
-func TestAccAccountAccessEntitlement_Identity_regionOverride(t *testing.T) {
+func testAccAccountAccessEntitlement_Identity_regionOverride(t *testing.T) {
 	ctx := acctest.Context(t)
 
 	resourceName := "aws_accountaccess_entitlement.test"
 	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
 
-	acctest.ParallelTest(ctx, t, resource.TestCase{
+	acctest.Test(ctx, t, resource.TestCase{
 		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
 			tfversion.SkipBelow(tfversion.Version1_12_0),
 		},
