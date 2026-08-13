@@ -12,7 +12,7 @@ import (
 //
 // The Account Access API is inconsistent about not-found signaling: some
 // operations return ResourceNotFoundException, but others (observed on
-// GetEntitlement / DeleteEntitlement against the preview service) return a
+// GetEntitlement / DeleteEntitlement) return a
 // ValidationException whose message contains "not found". Treat both as
 // not-found so Read can remove the resource from state and Delete can no-op.
 func isNotFoundError(err error) bool {

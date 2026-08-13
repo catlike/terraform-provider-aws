@@ -290,7 +290,7 @@ const (
 	ARCZonalShiftServiceID                = "ARC Zonal Shift"
 	AccessAnalyzerServiceID               = "AccessAnalyzer"
 	AccountServiceID                      = "Account"
-	AccountAccessServiceID                = "AccountAccess"
+	AccountAccessServiceID                = "Account Access"
 	AmplifyServiceID                      = "Amplify"
 	AppAutoScalingServiceID               = "Application Auto Scaling"
 	AppConfigServiceID                    = "AppConfig"

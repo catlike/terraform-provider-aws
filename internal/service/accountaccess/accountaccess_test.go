@@ -5,13 +5,12 @@ package accountaccess_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/accountaccess"
-	"github.com/hashicorp/aws-sdk-go-base/v2/endpoints"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
-	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 )
 
 // serializeDelay is applied between serialized subtests. Account Access allows
@@ -58,27 +57,19 @@ func TestAccAccountAccess_serial(t *testing.T) {
 	acctest.RunSerialTests2Levels(t, testCases, serializeDelay)
 }
 
-// Account Access launches in us-east-1 and us-west-2 only during preview.
-// Tests gate on these via testAccPreCheckRegion.
-var accountAccessRegions = []string{
-	endpoints.UsEast1RegionID,
-	endpoints.UsWest2RegionID,
-}
-
 // testAccPreCheck verifies the test environment can reach Account Access and
 // that the prerequisite IAM Identity Center instance exists in the test
 // account. It is the standard PreCheck for every acceptance test in this
 // package.
 //
 // Prerequisites that CANNOT be provisioned by Terraform in-test (and so are
-// asserted here instead):
-//   - The calling account must be allowlisted for the Account Access preview.
+// asserted here):
 //   - IAM Identity Center must be enabled with an instance in the test region
 //     (org-level setup). PreCheckSSOAdminInstances asserts this.
 func testAccPreCheck(ctx context.Context, t *testing.T) {
 	acctest.PreCheckSSOAdminInstances(ctx, t)
 
-	conn := acctest.Provider.Meta().(*conns.AWSClient).AccountAccessClient(ctx)
+	conn := acctest.ProviderMeta(ctx, t).AccountAccessClient(ctx)
 
 	_, err := conn.ListApplications(ctx, &accountaccess.ListApplicationsInput{})
 	if acctest.PreCheckSkipError(err) {
@@ -89,12 +80,6 @@ func testAccPreCheck(ctx context.Context, t *testing.T) {
 	}
 }
 
-// testAccPreCheckRegion skips the test unless the configured region is one
-// where the Account Access preview is available.
-func testAccPreCheckRegion(t *testing.T) {
-	acctest.PreCheckRegion(t, accountAccessRegions...)
-}
-
 // testAccPrerequisitesConfig returns HCL that self-provisions everything an
 // Account Access acceptance test needs, EXCEPT the IAM Identity Center
 // instance (which is an org-level prerequisite discovered via data source):
@@ -103,7 +88,7 @@ func testAccPreCheckRegion(t *testing.T) {
 //   - aws_identitystore_user       — a USER principal
 //   - aws_identitystore_group      — a GROUP principal
 //   - aws_iam_role                 — a target role with the Account Access
-//     trust policy (account-access-preview.amazonaws.com + sts:AssumeRole,
+//     trust policy (account-access.amazonaws.com + sts:AssumeRole,
 //     sts:SetContext, sts:TagSession — see CONTEXT.md §4/§5)
 //
 // Outputs are referenced by callers as:
@@ -112,12 +97,8 @@ func testAccPreCheckRegion(t *testing.T) {
 //	aws_identitystore_user.test.user_id
 //	aws_identitystore_group.test.group_id
 //	aws_iam_role.test.arn
-//
-// NOTE: the trust-policy service principal is the PREVIEW principal
-// (account-access-preview.amazonaws.com). At GA this likely becomes
-// account-access.amazonaws.com — update here when confirmed.
 func testAccPrerequisitesConfig(rName string) string {
-	return acctest.ConfigCompose(`
+	return acctest.ConfigCompose(fmt.Sprintf(`
 data "aws_ssoadmin_instances" "test" {}
 
 locals {
@@ -128,8 +109,8 @@ locals {
 resource "aws_identitystore_user" "test" {
   identity_store_id = local.identity_store_id
 
-  display_name = "` + rName + `"
-  user_name    = "` + rName + `"
+  display_name = "%[1]s"
+  user_name    = "%[1]s"
 
   name {
     given_name  = "Acceptance"
@@ -137,18 +118,18 @@ resource "aws_identitystore_user" "test" {
   }
 
   emails {
-    value = "` + rName + `@example.com"
+    value = "%[2]s"
   }
 }
 
 resource "aws_identitystore_group" "test" {
   identity_store_id = local.identity_store_id
-  display_name      = "` + rName + `"
+  display_name      = "%[1]s"
   description       = "Account Access acceptance test group"
 }
 
 resource "aws_iam_role" "test" {
-  name = "` + rName + `"
+  name = "%[1]s"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -156,7 +137,7 @@ resource "aws_iam_role" "test" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "account-access-preview.amazonaws.com"
+          Service = "account-access.amazonaws.com"
         }
         Action = [
           "sts:AssumeRole",
@@ -167,5 +148,5 @@ resource "aws_iam_role" "test" {
     ]
   })
 }
-`)
+`, rName, acctest.DefaultEmailAddress))
 }

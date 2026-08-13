@@ -75,9 +75,9 @@ const (
 
 const (
 	packageName = "accountaccess"
-	awsEnvVar   = "AWS_ENDPOINT_URL_ACCOUNTACCESS"
+	awsEnvVar   = "AWS_ENDPOINT_URL_ACCOUNT_ACCESS"
 	baseEnvVar  = "AWS_ENDPOINT_URL"
-	configParam = "accountaccess"
+	configParam = "account_access"
 )
 
 const (

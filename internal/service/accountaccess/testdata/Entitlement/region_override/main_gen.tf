@@ -33,7 +33,7 @@ resource "aws_iam_role" "test" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "account-access-preview.amazonaws.com"
+          Service = "account-access.amazonaws.com"
         }
         Action = [
           "sts:AssumeRole",
@@ -54,7 +54,7 @@ resource "aws_accountaccess_entitlement" "test" {
   principal_id    = aws_identitystore_user.test.user_id
   principal_type  = "USER"
   role_arn        = aws_iam_role.test.arn
-  region = var.region
+  region          = var.region
 
 }
 

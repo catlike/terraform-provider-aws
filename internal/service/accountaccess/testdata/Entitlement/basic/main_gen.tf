@@ -33,7 +33,7 @@ resource "aws_iam_role" "test" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "account-access-preview.amazonaws.com"
+          Service = "account-access.amazonaws.com"
         }
         Action = [
           "sts:AssumeRole",

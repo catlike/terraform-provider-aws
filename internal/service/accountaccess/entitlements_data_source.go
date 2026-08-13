@@ -88,10 +88,10 @@ func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.Re
 
 	filter := &awstypes.PrincipalRoleEntitlementFilter{}
 	if !data.RoleARN.IsNull() {
-		filter.RoleArn = aws.String(data.RoleARN.ValueString())
+		filter.RoleArn = data.RoleARN.ValueStringPointer()
 	}
 	if !data.AccountID.IsNull() {
-		filter.Account = aws.String(data.AccountID.ValueString())
+		filter.Account = data.AccountID.ValueStringPointer()
 	}
 	if !data.PrincipalID.IsNull() {
 		var idcFilter awstypes.IdentityCenterPrincipalFilter
@@ -105,7 +105,7 @@ func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.Re
 	}
 
 	input := &accountaccess.ListEntitlementsInput{
-		ApplicationArn: aws.String(data.ApplicationARN.ValueString()),
+		ApplicationArn: data.ApplicationARN.ValueStringPointer(),
 		Filter:         &awstypes.EntitlementFilter{PrincipalRole: filter},
 	}
 
@@ -149,7 +149,7 @@ func (d *entitlementsDataSource) Read(ctx context.Context, request datasource.Re
 	smerr.AddEnrich(ctx, &response.Diagnostics, response.State.Set(ctx, &data))
 }
 
-func flattenEntitlementSummary(ctx context.Context, summary awstypes.EntitlementSummary, model *entitlementsDataSourceItemModel) {
+func flattenEntitlementSummary(ctx context.Context, summary awstypes.EntitlementSummary, model *entitlementsDataSourceItemModel) { // nosemgrep:ci.semgrep.framework.manual-flattener-functions
 	pre, ok := summary.(*awstypes.EntitlementSummaryMemberPrincipalRole)
 	if !ok {
 		return

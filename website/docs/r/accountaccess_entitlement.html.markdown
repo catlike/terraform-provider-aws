@@ -12,7 +12,7 @@ Manages an AWS Account Access Entitlement. An Entitlement grants an IAM Identity
 
 ~> **Note:** Entitlements are immutable. Changing `principal_id`, `principal_type`, `role_arn`, or `application_arn` triggers replacement.
 
-~> **Note:** The IAM role referenced by `role_arn` must have a trust policy that allows the Account Access service to assume it. The role's `assume_role_policy` must grant `sts:AssumeRole`, `sts:SetContext`, and `sts:TagSession` to the `account-access-preview.amazonaws.com` service principal. Without `sts:TagSession`, credential retrieval for the entitlement fails. See the [Complete Example](#complete-example) below.
+~> **Note:** The IAM role referenced by `role_arn` must have a trust policy that allows the Account Access service to assume it. The role's `assume_role_policy` must grant `sts:AssumeRole`, `sts:SetContext`, and `sts:TagSession` to the `account-access.amazonaws.com` service principal. Without `sts:TagSession`, credential retrieval for the entitlement fails. See the [Complete Example](#complete-example) below.
 
 ## Example Usage
 
@@ -66,7 +66,7 @@ resource "aws_iam_role" "target" {
       {
         Effect = "Allow"
         Principal = {
-          Service = "account-access-preview.amazonaws.com"
+          Service = "account-access.amazonaws.com"
         }
         Action = [
           "sts:AssumeRole",
@@ -108,13 +108,6 @@ This resource exports the following attributes in addition to the arguments abov
 * `created_at` - Date and time, in [RFC3339 format](https://datatracker.ietf.org/doc/html/rfc3339), when the Entitlement was created.
 * `entitlement_id` - Service-assigned unique identifier for this Entitlement.
 * `id` - Composite identifier in the form `<application_arn>,<entitlement_id>`. Used for `terraform import`.
-
-## Timeouts
-
-[Configuration options](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts):
-
-* `create` - (Default `15m`)
-* `delete` - (Default `15m`)
 
 ## Import
 

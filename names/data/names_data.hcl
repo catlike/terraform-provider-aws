@@ -58,7 +58,7 @@ service "accountaccess" {
   }
 
   sdk {
-    id            = "AccountAccess"
+    id            = "Account Access"
     arn_namespace = "account-access"
   }
 

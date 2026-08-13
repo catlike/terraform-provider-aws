@@ -210,7 +210,7 @@ func (r *applicationResource) Delete(ctx context.Context, request resource.Delet
 	conn := r.Meta().AccountAccessClient(ctx)
 
 	_, err := conn.DeleteApplication(ctx, &accountaccess.DeleteApplicationInput{
-		ApplicationArn: aws.String(state.ARN.ValueString()),
+		ApplicationArn: state.ARN.ValueStringPointer(),
 	})
 	if isNotFoundError(err) {
 		return
@@ -229,7 +229,7 @@ func (r *applicationResource) Delete(ctx context.Context, request resource.Delet
 // flattenApplication copies fields from the SDK GetApplication response onto
 // the Terraform model. Handles the IdentitySource union by extracting the
 // IdentityCenter member.
-func flattenApplication(ctx context.Context, app *accountaccess.GetApplicationOutput, model *applicationResourceModel) {
+func flattenApplication(ctx context.Context, app *accountaccess.GetApplicationOutput, model *applicationResourceModel) { // nosemgrep:ci.semgrep.framework.manual-flattener-functions
 	model.Status = fwtypes.StringEnumValue(app.Status)
 	model.TenantID = fwflex.StringToFramework(ctx, app.TenantId)
 	model.CreatedAt = timetypes.NewRFC3339TimeValue(aws.ToTime(app.CreatedAt))

@@ -157,7 +157,7 @@ func (r *entitlementResource) Create(ctx context.Context, request resource.Creat
 	}
 
 	input := &accountaccess.CreateEntitlementInput{
-		ApplicationArn: aws.String(plan.ApplicationARN.ValueString()),
+		ApplicationArn: plan.ApplicationARN.ValueStringPointer(),
 		Entitlement: &awstypes.EntitlementMemberPrincipalRole{
 			Value: awstypes.PrincipalRoleEntitlement{
 				Principal: &awstypes.PrincipalMemberIdentityCenter{Value: idcPrincipal},
@@ -240,8 +240,8 @@ func (r *entitlementResource) Delete(ctx context.Context, request resource.Delet
 	conn := r.Meta().AccountAccessClient(ctx)
 
 	_, err := conn.DeleteEntitlement(ctx, &accountaccess.DeleteEntitlementInput{
-		ApplicationArn: aws.String(state.ApplicationARN.ValueString()),
-		EntitlementId:  aws.String(state.EntitlementID.ValueString()),
+		ApplicationArn: state.ApplicationARN.ValueStringPointer(),
+		EntitlementId:  state.EntitlementID.ValueStringPointer(),
 	})
 	if isNotFoundError(err) {
 		return
@@ -255,7 +255,7 @@ func (r *entitlementResource) Delete(ctx context.Context, request resource.Delet
 // flattenEntitlement copies fields from the SDK GetEntitlement response onto
 // the Terraform model. Handles the EntitlementDetails / Principal Smithy
 // unions by pattern-matching on the member types.
-func flattenEntitlement(ctx context.Context, out *accountaccess.GetEntitlementOutput, model *entitlementResourceModel) {
+func flattenEntitlement(ctx context.Context, out *accountaccess.GetEntitlementOutput, model *entitlementResourceModel) { // nosemgrep:ci.semgrep.framework.manual-flattener-functions
 	model.ApplicationARN = fwtypes.ARNValue(aws.ToString(out.ApplicationArn))
 	model.EntitlementID = fwflex.StringToFramework(ctx, out.EntitlementId)
 	model.CreatedAt = timetypes.NewRFC3339TimeValue(aws.ToTime(out.CreatedAt))

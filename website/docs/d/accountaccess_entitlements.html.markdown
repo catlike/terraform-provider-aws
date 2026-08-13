@@ -48,16 +48,15 @@ The following arguments are required:
 
 * `application_arn` - (Required) ARN of the parent Application to list entitlements within.
 
-You must also supply **at least one** of the following filter arguments:
-
-* `principal_id` - (Optional) Identity Center user or group ID to filter by. Must be set together with `principal_type`.
-* `principal_type` - (Optional) Type of principal. Valid values: `USER`, `GROUP`. Must be set together with `principal_id`.
-* `role_arn` - (Optional) Target IAM role ARN to filter by.
-* `account_id` - (Optional) 12-digit AWS account ID to filter by.
-
 The following arguments are optional:
 
+* `account_id` - (Optional) 12-digit AWS account ID to filter by.
+* `principal_id` - (Optional) Identity Center user or group ID to filter by. Must be set together with `principal_type`.
+* `principal_type` - (Optional) Type of principal. Valid values: `USER`, `GROUP`. Must be set together with `principal_id`.
 * `region` - (Optional) Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).
+* `role_arn` - (Optional) Target IAM role ARN to filter by.
+
+At least one of `principal_id`+`principal_type`, `role_arn`, or `account_id` must be configured.
 
 ## Attribute Reference
 
