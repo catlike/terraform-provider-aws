@@ -32,13 +32,10 @@ data "aws_accountaccess_application" "example" {
 
 ## Argument Reference
 
-Exactly one of the following arguments is required:
-
-* `arn` - (Optional) ARN of the Application to look up.
-* `identity_center_instance_arn` - (Optional) ARN of the IAM Identity Center instance whose bound Application should be returned.
-
 The following arguments are optional:
 
+* `arn` - (Optional) ARN of the Application to look up. Exactly one of `arn` or `identity_center_instance_arn` must be specified.
+* `identity_center_instance_arn` - (Optional) ARN of the IAM Identity Center instance whose bound Application should be returned. Exactly one of `arn` or `identity_center_instance_arn` must be specified.
 * `region` - (Optional) Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).
 
 ## Attribute Reference

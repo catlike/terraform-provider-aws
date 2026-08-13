@@ -50,24 +50,27 @@ The following arguments are required:
 
 The following arguments are optional:
 
-* `account_id` - (Optional) 12-digit AWS account ID to filter by.
-* `principal_id` - (Optional) Identity Center user or group ID to filter by. Must be set together with `principal_type`.
-* `principal_type` - (Optional) Type of principal. Valid values: `USER`, `GROUP`. Must be set together with `principal_id`.
+* `account_id` - (Optional) 12-digit AWS account ID to filter by. At least one of `account_id`, `role_arn`, or the `principal_id` and `principal_type` pair must be configured.
+* `principal_id` - (Optional) Identity Center user or group ID to filter by. Must be set together with `principal_type`. At least one of `account_id`, `role_arn`, or the `principal_id` and `principal_type` pair must be configured.
+* `principal_type` - (Optional) Type of principal. Valid values: `USER`, `GROUP`. Must be set together with `principal_id`. At least one of `account_id`, `role_arn`, or the `principal_id` and `principal_type` pair must be configured.
 * `region` - (Optional) Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).
-* `role_arn` - (Optional) Target IAM role ARN to filter by.
-
-At least one of `principal_id`+`principal_type`, `role_arn`, or `account_id` must be configured.
+* `role_arn` - (Optional) Target IAM role ARN to filter by. At least one of `account_id`, `role_arn`, or the `principal_id` and `principal_type` pair must be configured.
 
 ## Attribute Reference
 
 This data source exports the following attributes in addition to the arguments above:
 
-* `entitlements` - List of matching Entitlements. Each element contains:
-    * `account_id` - 12-digit AWS account ID extracted from the target role ARN.
-    * `account_name` - Best-effort human-readable name of the target account.
-    * `created_at` - Date and time, in [RFC3339 format](https://datatracker.ietf.org/doc/html/rfc3339), when the Entitlement was created.
-    * `entitlement_id` - Service-assigned unique identifier for the Entitlement.
-    * `principal_id` - Identity Center user or group ID granted access.
-    * `principal_type` - Type of principal: `USER` or `GROUP`.
-    * `role_arn` - Target IAM role ARN.
+* `entitlements` - List of matching Entitlements. See [`entitlements`](#entitlements-block) below.
 * `id` - Application ARN (synthetic — kept for compatibility with Terraform's data-source ID convention).
+
+### `entitlements` Block
+
+The `entitlements` block contains:
+
+* `account_id` - 12-digit AWS account ID extracted from the target role ARN.
+* `account_name` - Best-effort human-readable name of the target account.
+* `created_at` - Date and time, in [RFC3339 format](https://datatracker.ietf.org/doc/html/rfc3339), when the Entitlement was created.
+* `entitlement_id` - Service-assigned unique identifier for the Entitlement.
+* `principal_id` - Identity Center user or group ID granted access.
+* `principal_type` - Type of principal: `USER` or `GROUP`.
+* `role_arn` - Target IAM role ARN.
