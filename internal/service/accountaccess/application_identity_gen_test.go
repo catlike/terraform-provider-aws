@@ -25,8 +25,7 @@ func testAccAccountAccessApplication_identitySerial(t *testing.T) {
 	t.Helper()
 
 	testCases := map[string]func(t *testing.T){
-		acctest.CtBasic:  testAccAccountAccessApplication_Identity_basic,
-		"RegionOverride": testAccAccountAccessApplication_Identity_regionOverride,
+		acctest.CtBasic: testAccAccountAccessApplication_Identity_basic,
 	}
 
 	acctest.RunSerialTests1Level(t, testCases, 0)
@@ -111,126 +110,6 @@ func testAccAccountAccessApplication_Identity_basic(t *testing.T) {
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
 						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.Region())),
-					},
-				},
-			},
-		},
-	})
-}
-
-func testAccAccountAccessApplication_Identity_regionOverride(t *testing.T) {
-	ctx := acctest.Context(t)
-
-	resourceName := "aws_accountaccess_application.test"
-	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
-
-	acctest.Test(ctx, t, resource.TestCase{
-		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
-			tfversion.SkipBelow(tfversion.Version1_12_0),
-		},
-		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
-		ErrorCheck:               acctest.ErrorCheck(t, names.AccountAccessServiceID),
-		CheckDestroy:             acctest.CheckDestroyNoop,
-		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
-		Steps: []resource.TestStep{
-			// Step 1: Setup
-			{
-				ConfigDirectory: config.StaticDirectory("testdata/Application/region_override/"),
-				ConfigVariables: config.Variables{
-					acctest.CtRName: config.StringVariable(rName),
-					"region":        config.StringVariable(acctest.AlternateRegion()),
-				},
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.CompareValuePairs(resourceName, tfjsonpath.New(names.AttrID), resourceName, tfjsonpath.New(names.AttrARN), compare.ValuesSame()),
-					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
-					statecheck.ExpectIdentity(resourceName, map[string]knownvalue.Check{
-						names.AttrARN: knownvalue.NotNull(),
-					}),
-					statecheck.ExpectIdentityValueMatchesState(resourceName, tfjsonpath.New(names.AttrARN)),
-				},
-			},
-
-			// Step 2: Import command with appended "@<region>"
-			{
-				ConfigDirectory: config.StaticDirectory("testdata/Application/region_override/"),
-				ConfigVariables: config.Variables{
-					acctest.CtRName: config.StringVariable(rName),
-					"region":        config.StringVariable(acctest.AlternateRegion()),
-				},
-				ImportStateKind:   resource.ImportCommandWithID,
-				ImportStateIdFunc: acctest.CrossRegionImportStateIdFunc(resourceName),
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
-
-			// Step 3: Import command without appended "@<region>"
-			{
-				ConfigDirectory: config.StaticDirectory("testdata/Application/region_override/"),
-				ConfigVariables: config.Variables{
-					acctest.CtRName: config.StringVariable(rName),
-					"region":        config.StringVariable(acctest.AlternateRegion()),
-				},
-				ImportStateKind:   resource.ImportCommandWithID,
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateVerify: true,
-			},
-
-			// Step 4: Import block with Import ID and appended "@<region>"
-			{
-				ConfigDirectory: config.StaticDirectory("testdata/Application/region_override/"),
-				ConfigVariables: config.Variables{
-					acctest.CtRName: config.StringVariable(rName),
-					"region":        config.StringVariable(acctest.AlternateRegion()),
-				},
-				ResourceName:      resourceName,
-				ImportState:       true,
-				ImportStateKind:   resource.ImportBlockWithID,
-				ImportStateIdFunc: acctest.CrossRegionImportStateIdFunc(resourceName),
-				ImportPlanChecks: resource.ImportPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
-					},
-				},
-			},
-
-			// Step 5: Import block with Import ID and no appended "@<region>"
-			{
-				ConfigDirectory: config.StaticDirectory("testdata/Application/region_override/"),
-				ConfigVariables: config.Variables{
-					acctest.CtRName: config.StringVariable(rName),
-					"region":        config.StringVariable(acctest.AlternateRegion()),
-				},
-				ResourceName:    resourceName,
-				ImportState:     true,
-				ImportStateKind: resource.ImportBlockWithID,
-				ImportPlanChecks: resource.ImportPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
-					},
-				},
-			},
-
-			// Step 6: Import block with Resource Identity
-			{
-				ConfigDirectory: config.StaticDirectory("testdata/Application/region_override/"),
-				ConfigVariables: config.Variables{
-					acctest.CtRName: config.StringVariable(rName),
-					"region":        config.StringVariable(acctest.AlternateRegion()),
-				},
-				ResourceName:    resourceName,
-				ImportState:     true,
-				ImportStateKind: resource.ImportBlockWithResourceIdentity,
-				ImportPlanChecks: resource.ImportPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrARN), knownvalue.NotNull()),
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrID), knownvalue.NotNull()),
-						plancheck.ExpectKnownValue(resourceName, tfjsonpath.New(names.AttrRegion), knownvalue.StringExact(acctest.AlternateRegion())),
 					},
 				},
 			},

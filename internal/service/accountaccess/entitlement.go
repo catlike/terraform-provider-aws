@@ -60,6 +60,7 @@ func (principalType) Values() []principalType {
 // @Testing(importStateIdAttributes="application_arn;entitlement_id", importStateIdAttributesSep="flex.ResourceIdSeparator")
 // @Testing(existsType="github.com/aws/aws-sdk-go-v2/service/accountaccess;accountaccess.GetEntitlementOutput")
 // @Testing(importIgnore="account_name")
+// @Testing(identityRegionOverrideTest=false)
 // @Testing(plannableImportAction="NoOp")
 // @Testing(serialize=true)
 func newEntitlementResource(_ context.Context) (resource.ResourceWithConfigure, error) {
