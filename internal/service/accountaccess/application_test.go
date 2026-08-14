@@ -39,7 +39,7 @@ func testAccAccountAccessApplication_basic(t *testing.T) {
 				Config: testAccApplicationConfig_basic(rName),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testAccCheckApplicationExists(ctx, t, resourceName, &v),
-					resource.TestCheckResourceAttrPair(resourceName, names.AttrARN, resourceName, "id"),
+					resource.TestCheckResourceAttrPair(resourceName, names.AttrARN, resourceName, names.AttrID),
 					resource.TestCheckResourceAttrSet(resourceName, "identity_center_application_arn"),
 					resource.TestCheckResourceAttr(resourceName, names.AttrStatus, "ACTIVE"),
 				),
