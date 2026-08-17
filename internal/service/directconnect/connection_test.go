@@ -89,10 +89,55 @@ func TestAccDirectConnectConnection_disappears(t *testing.T) {
 	})
 }
 
+func TestAccDirectConnectConnection_name(t *testing.T) {
+	ctx := acctest.Context(t)
+	var connection awstypes.Connection
+	var connectionID string
+	resourceName := "aws_dx_connection.test"
+	rName := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
+	rNameUpdated := rName + "-updated"
+
+	acctest.ParallelTest(ctx, t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckConnectionDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccConnectionConfig_basic(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckConnectionExists(ctx, t, resourceName, &connection),
+					testAccCheckConnectionID(resourceName, &connectionID),
+				),
+			},
+			{
+				Config: testAccConnectionConfig_basic(rNameUpdated),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckConnectionExists(ctx, t, resourceName, &connection),
+					testAccCheckConnectionID(resourceName, &connectionID),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rNameUpdated),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"request_macsec", names.AttrSkipDestroy},
+			},
+		},
+	})
+}
+
 func TestAccDirectConnectConnection_encryptionMode(t *testing.T) {
 	ctx := acctest.Context(t)
 	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
 	connectionName := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_NAME")
+	connectionNameUpdated := connectionName + "-updated"
 
 	var connection awstypes.Connection
 	resourceName := "aws_dx_connection.test"
@@ -113,13 +158,13 @@ func TestAccDirectConnectConnection_encryptionMode(t *testing.T) {
 				ImportStatePersist: true,
 			},
 			{
-				Config: testAccConnectionConfig_encryptionModeNoEncrypt(connectionName),
+				Config: testAccConnectionConfig_encryptionModeNoEncrypt(connectionNameUpdated),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckConnectionExists(ctx, t, resourceName, &connection),
 					acctest.MatchResourceAttrRegionalARN(ctx, resourceName, names.AttrARN, "directconnect", regexache.MustCompile(`dxcon/.+`)),
 					resource.TestCheckResourceAttr(resourceName, "encryption_mode", "no_encrypt"),
 					resource.TestCheckResourceAttrSet(resourceName, names.AttrLocation),
-					resource.TestCheckResourceAttr(resourceName, names.AttrName, connectionName),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, connectionNameUpdated),
 					resource.TestCheckResourceAttr(resourceName, names.AttrSkipDestroy, acctest.CtTrue),
 				),
 			},
@@ -399,6 +444,26 @@ func testAccCheckConnectionExists(ctx context.Context, t *testing.T, n string, v
 		}
 
 		*v = *output
+
+		return nil
+	}
+}
+
+func testAccCheckConnectionID(n string, expectedID *string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[n]
+		if !ok {
+			return fmt.Errorf("Not found: %s", n)
+		}
+
+		if *expectedID == "" {
+			*expectedID = rs.Primary.ID
+			return nil
+		}
+
+		if rs.Primary.ID != *expectedID {
+			return fmt.Errorf("Direct Connect Connection ID changed from %s to %s", *expectedID, rs.Primary.ID)
+		}
 
 		return nil
 	}

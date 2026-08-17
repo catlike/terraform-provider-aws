@@ -203,7 +203,6 @@ func resourceConnection() *schema.Resource {
 				names.AttrName: {
 					Type:     schema.TypeString,
 					Required: true,
-					ForceNew: true,
 				},
 				names.AttrOwnerAccountID: {
 					Type:     schema.TypeString,
@@ -320,10 +319,17 @@ func resourceConnectionUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	var diags diag.Diagnostics
 	conn := meta.(*conns.AWSClient).DirectConnectClient(ctx)
 
-	if d.HasChange("encryption_mode") {
+	if d.HasChanges(names.AttrName, "encryption_mode") {
 		input := &directconnect.UpdateConnectionInput{
-			ConnectionId:   aws.String(d.Id()),
-			EncryptionMode: aws.String(d.Get("encryption_mode").(string)),
+			ConnectionId: aws.String(d.Id()),
+		}
+
+		if d.HasChange(names.AttrName) {
+			input.ConnectionName = aws.String(d.Get(names.AttrName).(string))
+		}
+
+		if d.HasChange("encryption_mode") {
+			input.EncryptionMode = aws.String(d.Get("encryption_mode").(string))
 		}
 
 		_, err := conn.UpdateConnection(ctx, input)
@@ -332,8 +338,16 @@ func resourceConnectionUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			return sdkdiag.AppendErrorf(diags, "updating Direct Connect Connection (%s): %s", d.Id(), err)
 		}
 
-		if _, err := waitConnectionConfirmed(ctx, conn, d.Id()); err != nil {
-			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Connection (%s) update: %s", d.Id(), err)
+		if d.HasChange("encryption_mode") {
+			if _, err := waitConnectionConfirmed(ctx, conn, d.Id()); err != nil {
+				return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Connection (%s) update: %s", d.Id(), err)
+			}
+		}
+
+		if d.HasChange(names.AttrName) {
+			if _, err := waitConnectionNameUpdated(ctx, conn, d.Id(), d.Get(names.AttrName).(string)); err != nil {
+				return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Connection (%s) name update: %s", d.Id(), err)
+			}
 		}
 	}
 
@@ -424,6 +438,20 @@ func findConnections(ctx context.Context, conn *directconnect.Client, input *dir
 	}
 
 	return tfslices.Filter(output.Connections, tfslices.PredicateValue(filter)), nil
+}
+
+func waitConnectionNameUpdated(ctx context.Context, conn *directconnect.Client, id, name string) (*awstypes.Connection, error) {
+	const timeout = 2 * time.Minute
+
+	return retry.Op(func(ctx context.Context) (*awstypes.Connection, error) {
+		return findConnectionByID(ctx, conn, id)
+	}).If(func(v *awstypes.Connection, err error) (bool, error) {
+		if err != nil {
+			return retry.NotFound(err), err
+		}
+
+		return aws.ToString(v.ConnectionName) != name, nil
+	})(ctx, timeout)
 }
 
 func statusConnection(conn *directconnect.Client, id string) retry.StateRefreshFunc {
