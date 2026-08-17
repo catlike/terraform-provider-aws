@@ -139,6 +139,21 @@ func statusVirtualInterface(conn *directconnect.Client, id string) retry.StateRe
 	}
 }
 
+func waitVirtualInterfaceNameUpdated(ctx context.Context, conn *directconnect.Client, id, name string, timeout time.Duration) (*awstypes.VirtualInterface, error) {
+	return retry.Op(func(ctx context.Context) (*awstypes.VirtualInterface, error) {
+		return findVirtualInterfaceByID(ctx, conn, id)
+	}).If(func(vif *awstypes.VirtualInterface, err error) (bool, error) {
+		if retry.NotFound(err) {
+			return true, err
+		}
+		if err != nil {
+			return false, err
+		}
+
+		return aws.ToString(vif.VirtualInterfaceName) != name, nil
+	})(ctx, timeout)
+}
+
 func waitVirtualInterfaceAvailable(ctx context.Context, conn *directconnect.Client, id string, pending, target []string, timeout time.Duration) (*awstypes.VirtualInterface, error) {
 	stateConf := &retry.StateChangeConf{
 		Pending:    pending,
