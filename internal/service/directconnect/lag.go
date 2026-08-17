@@ -17,6 +17,7 @@ import (
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 	"github.com/hashicorp/terraform-provider-aws/internal/enum"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs"
@@ -37,6 +38,8 @@ func resourceLag() *schema.Resource {
 		UpdateWithoutTimeout: resourceLagUpdate,
 		DeleteWithoutTimeout: resourceLagDelete,
 
+		CustomizeDiff: resourceLagCustomizeDiff,
+
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
 		},
@@ -51,6 +54,14 @@ func resourceLag() *schema.Resource {
 					Type:     schema.TypeString,
 					Optional: true,
 					ForceNew: true,
+				},
+				"child_connection_tags": tftags.TagsSchemaForceNew(),
+				"connection_ids": {
+					Type:     schema.TypeSet,
+					Computed: true,
+					Elem: &schema.Schema{
+						Type: schema.TypeString,
+					},
 				},
 				"connections_bandwidth": {
 					Type:         schema.TypeString,
@@ -70,6 +81,13 @@ func resourceLag() *schema.Resource {
 				"jumbo_frame_capable": {
 					Type:     schema.TypeBool,
 					Computed: true,
+				},
+				"number_of_connections": {
+					Type:         schema.TypeInt,
+					Optional:     true,
+					Default:      0,
+					ForceNew:     true,
+					ValidateFunc: validation.IntBetween(0, 4),
 				},
 				names.AttrLocation: {
 					Type:     schema.TypeString,
@@ -97,11 +115,66 @@ func resourceLag() *schema.Resource {
 	}
 }
 
+func resourceLagCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, meta any) error {
+	for _, key := range []string{"number_of_connections", "connections_bandwidth", names.AttrConnectionID, "child_connection_tags"} {
+		if !diff.NewValueKnown(key) {
+			return nil
+		}
+	}
+
+	return validateLagProvisioningControls(
+		diff.Get("number_of_connections").(int),
+		diff.Get("connections_bandwidth").(string),
+		diff.Get(names.AttrConnectionID).(string),
+		diff.Get("child_connection_tags").(map[string]any),
+	)
+}
+
+func validateLagProvisioningControls(numberOfConnections int, connectionsBandwidth, connectionID string, childConnectionTags map[string]any) error {
+	if numberOfConnections > 0 && connectionID != "" {
+		return fmt.Errorf("'number_of_connections' cannot be set with 'connection_id'")
+	}
+
+	if numberOfConnections > 0 && (connectionsBandwidth == "100Gbps" || connectionsBandwidth == "400Gbps") && numberOfConnections > 2 {
+		return fmt.Errorf("'number_of_connections' cannot be greater than 2 when 'connections_bandwidth' is %q", connectionsBandwidth)
+	}
+
+	if numberOfConnections == 0 && len(childConnectionTags) > 0 {
+		return fmt.Errorf("'child_connection_tags' can only be set when 'number_of_connections' is greater than 0")
+	}
+
+	return nil
+}
+
+func lagConnectionIDs(connections []awstypes.Connection) []string {
+	connectionIDs := make([]string, 0, len(connections))
+
+	for _, connection := range connections {
+		if connectionID := aws.ToString(connection.ConnectionId); connectionID != "" {
+			connectionIDs = append(connectionIDs, connectionID)
+		}
+	}
+
+	return connectionIDs
+}
+
 func resourceLagCreate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
 	var diags diag.Diagnostics
 	conn := meta.(*conns.AWSClient).DirectConnectClient(ctx)
 
 	name := d.Get(names.AttrName).(string)
+	numberOfConnections := d.Get("number_of_connections").(int)
+	connectionID, connectionIDSpecified := d.GetOk(names.AttrConnectionID)
+	connectionIDString := ""
+	if connectionIDSpecified {
+		connectionIDString = connectionID.(string)
+	}
+	childConnectionTags := d.Get("child_connection_tags").(map[string]any)
+
+	if err := validateLagProvisioningControls(numberOfConnections, d.Get("connections_bandwidth").(string), connectionIDString, childConnectionTags); err != nil {
+		return sdkdiag.AppendFromErr(diags, err)
+	}
+
 	input := &directconnect.CreateLagInput{
 		ConnectionsBandwidth: aws.String(d.Get("connections_bandwidth").(string)),
 		LagName:              aws.String(name),
@@ -109,13 +182,17 @@ func resourceLagCreate(ctx context.Context, d *schema.ResourceData, meta any) di
 		Tags:                 getTagsIn(ctx),
 	}
 
-	var connectionIDSpecified bool
-	if v, ok := d.GetOk(names.AttrConnectionID); ok {
-		connectionIDSpecified = true
-		input.ConnectionId = aws.String(v.(string))
-		input.NumberOfConnections = int32(1)
+	if numberOfConnections > 0 {
+		input.NumberOfConnections = int32(numberOfConnections)
+		input.ChildConnectionTags = svcTags(tftags.New(ctx, childConnectionTags))
 	} else {
-		input.NumberOfConnections = int32(1)
+		// Direct Connect requires one connection, while zero preserves the historical
+		// provider behavior of creating and then deleting a bootstrap connection.
+		input.NumberOfConnections = 1
+	}
+
+	if connectionIDSpecified {
+		input.ConnectionId = aws.String(connectionIDString)
 	}
 
 	if v, ok := d.GetOk(names.AttrProviderName); ok {
@@ -130,10 +207,28 @@ func resourceLagCreate(ctx context.Context, d *schema.ResourceData, meta any) di
 
 	d.SetId(aws.ToString(output.LagId))
 
-	// Delete unmanaged connection.
-	if !connectionIDSpecified {
-		if err := deleteConnection(ctx, conn, aws.ToString(output.Connections[0].ConnectionId), waitConnectionDeleted); err != nil {
-			return sdkdiag.AppendFromErr(diags, err)
+	if numberOfConnections == 0 && !connectionIDSpecified {
+		// Delete the compatibility bootstrap connections so legacy configurations
+		// continue to create an empty LAG.
+		for _, connection := range output.Connections {
+			if err := deleteConnection(ctx, conn, aws.ToString(connection.ConnectionId), waitConnectionDeleted); err != nil {
+				return sdkdiag.AppendFromErr(diags, err)
+			}
+		}
+		if err := d.Set("connection_ids", []string{}); err != nil {
+			return sdkdiag.AppendErrorf(diags, "setting Direct Connect LAG (%s) connection IDs: %s", d.Id(), err)
+		}
+	} else if numberOfConnections > 0 {
+		lag, err := waitLagConnectionsVisible(ctx, conn, d.Id(), numberOfConnections)
+		if err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect LAG (%s) connections: %s", d.Id(), err)
+		}
+		if err := d.Set("connection_ids", lagConnectionIDs(lag.Connections)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "setting Direct Connect LAG (%s) connection IDs: %s", d.Id(), err)
+		}
+	} else {
+		if err := d.Set("connection_ids", []string{}); err != nil {
+			return sdkdiag.AppendErrorf(diags, "setting Direct Connect LAG (%s) connection IDs: %s", d.Id(), err)
 		}
 	}
 
@@ -171,6 +266,38 @@ func resourceLagRead(ctx context.Context, d *schema.ResourceData, meta any) diag
 	d.Set(names.AttrName, lag.LagName)
 	d.Set(names.AttrOwnerAccountID, lag.OwnerAccount)
 	d.Set(names.AttrProviderName, lag.ProviderName)
+
+	trackedConnectionIDs := d.Get("connection_ids").(*schema.Set)
+	lagConnectionIDs := make(map[string]struct{}, len(lag.Connections))
+	for _, connection := range lag.Connections {
+		lagConnectionIDs[aws.ToString(connection.ConnectionId)] = struct{}{}
+	}
+
+	connectionIDs := make([]string, 0, trackedConnectionIDs.Len())
+	for _, connectionID := range trackedConnectionIDs.List() {
+		connectionID := connectionID.(string)
+		if connectionID == "" {
+			continue
+		}
+
+		if _, ok := lagConnectionIDs[connectionID]; ok {
+			connectionIDs = append(connectionIDs, connectionID)
+			continue
+		}
+
+		_, err := findConnectionByID(ctx, conn, connectionID)
+		if retry.NotFound(err) {
+			continue
+		}
+		if err != nil {
+			return sdkdiag.AppendErrorf(diags, "reading Direct Connect Connection (%s): %s", connectionID, err)
+		}
+
+		connectionIDs = append(connectionIDs, connectionID)
+	}
+	if err := d.Set("connection_ids", connectionIDs); err != nil {
+		return sdkdiag.AppendErrorf(diags, "setting Direct Connect LAG (%s) connection IDs: %s", d.Id(), err)
+	}
 
 	return diags
 }
@@ -215,9 +342,19 @@ func resourceLagDelete(ctx context.Context, d *schema.ResourceData, meta any) di
 				return sdkdiag.AppendFromErr(diags, err)
 			}
 		}
-	} else if v, ok := d.GetOk(names.AttrConnectionID); ok {
-		if err := deleteConnectionLAGAssociation(ctx, conn, v.(string), d.Id()); err != nil {
-			return sdkdiag.AppendFromErr(diags, err)
+	} else {
+		if v, ok := d.GetOk("connection_ids"); ok {
+			for _, connectionID := range v.(*schema.Set).List() {
+				if err := deleteConnection(ctx, conn, connectionID.(string), waitConnectionDeleted); err != nil {
+					return sdkdiag.AppendFromErr(diags, err)
+				}
+			}
+		}
+
+		if v, ok := d.GetOk(names.AttrConnectionID); ok {
+			if err := deleteConnectionLAGAssociation(ctx, conn, v.(string), d.Id()); err != nil {
+				return sdkdiag.AppendFromErr(diags, err)
+			}
 		}
 	}
 
@@ -289,6 +426,46 @@ func findLags(ctx context.Context, conn *directconnect.Client, input *directconn
 	}
 
 	return tfslices.Filter(output.Lags, tfslices.PredicateValue(filter)), nil
+}
+
+func statusLagConnectionsVisible(conn *directconnect.Client, id string, expectedCount int) retry.StateRefreshFunc {
+	return func(ctx context.Context) (any, string, error) {
+		lag, err := findLagByID(ctx, conn, id)
+
+		if retry.NotFound(err) {
+			return nil, "pending", nil
+		}
+		if err != nil {
+			return nil, "", err
+		}
+
+		if len(lag.Connections) == expectedCount {
+			return lag, "visible", nil
+		}
+
+		return lag, "pending", nil
+	}
+}
+
+func waitLagConnectionsVisible(ctx context.Context, conn *directconnect.Client, id string, expectedCount int) (*awstypes.Lag, error) {
+	const timeout = 2 * time.Minute
+
+	stateConf := &retry.StateChangeConf{
+		Pending:                   []string{"pending"},
+		Target:                    []string{"visible"},
+		Refresh:                   statusLagConnectionsVisible(conn, id, expectedCount),
+		Timeout:                   timeout,
+		NotFoundChecks:            20,
+		ContinuousTargetOccurence: 2,
+	}
+
+	outputRaw, err := stateConf.WaitForStateContext(ctx)
+
+	if output, ok := outputRaw.(*awstypes.Lag); ok {
+		return output, err
+	}
+
+	return nil, err
 }
 
 func statusLag(conn *directconnect.Client, id string) retry.StateRefreshFunc {
