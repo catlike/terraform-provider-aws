@@ -13,8 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
+	tfdirectconnect "github.com/hashicorp/terraform-provider-aws/internal/service/directconnect"
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
@@ -64,6 +66,88 @@ func TestAccDirectConnectHostedPrivateVirtualInterface_basic(t *testing.T) {
 			},
 			{
 				Config:            testAccHostedPrivateVirtualInterfaceConfig_basic(connectionID, rName, bgpAsn, vlan),
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestResourceHostedPrivateVirtualInterface_schemaNameNotForceNew(t *testing.T) {
+	t.Parallel()
+
+	if tfdirectconnect.ResourceHostedPrivateVirtualInterface().SchemaFunc()[names.AttrName].ForceNew {
+		t.Errorf("name schema ForceNew = true, want false")
+	}
+}
+
+func TestAccDirectConnectHostedPrivateVirtualInterface_name(t *testing.T) {
+	ctx := acctest.Context(t)
+	if testing.Short() {
+		t.Skip("skipping long-running test in short mode")
+	}
+	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
+
+	var (
+		vif   awstypes.VirtualInterface
+		vifID string
+	)
+	resourceName := "aws_dx_hosted_private_virtual_interface.test"
+	rName := fmt.Sprintf("tf-testacc-hosted-private-vif-%s", acctest.RandString(t, 9))
+	rNameUpdated := fmt.Sprintf("tf-testacc-hosted-private-vif-%s", acctest.RandString(t, 9))
+	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
+	vlan := acctest.RandIntRange(t, 2049, 4094)
+
+	acctest.ParallelTest(ctx, t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			acctest.PreCheckAlternateAccount(t)
+		},
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5FactoriesAlternate(ctx, t),
+		CheckDestroy:             testAccCheckHostedPrivateVirtualInterfaceDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccHostedPrivateVirtualInterfaceConfig_name(connectionID, rName, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckHostedPrivateVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						vifID = rs.Primary.ID
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccHostedPrivateVirtualInterfaceConfig_name(connectionID, rNameUpdated, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckHostedPrivateVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rNameUpdated),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						if rs.Primary.ID != vifID {
+							return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+						}
+
+						return nil
+					},
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -199,6 +283,42 @@ resource "aws_dx_hosted_private_virtual_interface_accepter" "test" {
   vpn_gateway_id       = aws_vpn_gateway.test.id
 }
 `)
+}
+
+func testAccHostedPrivateVirtualInterfaceConfig_name(cid, rName string, bgpAsn, vlan int) string {
+	return acctest.ConfigCompose(acctest.ConfigAlternateAccountProvider(), fmt.Sprintf(`
+resource "aws_dx_hosted_private_virtual_interface" "test" {
+  address_family   = "ipv4"
+  bgp_asn          = %[3]d
+  connection_id    = %[1]q
+  name             = %[2]q
+  owner_account_id = data.aws_caller_identity.accepter.account_id
+  vlan             = %[4]d
+
+  # The aws_dx_hosted_private_virtual_interface
+  # must be destroyed before the aws_vpn_gateway.
+  depends_on = [aws_vpn_gateway.test]
+}
+
+data "aws_caller_identity" "accepter" {
+  provider = "awsalternate"
+}
+
+resource "aws_vpn_gateway" "test" {
+  provider = "awsalternate"
+
+  tags = {
+    Name = "tf-testacc-hosted-private-vif"
+  }
+}
+
+resource "aws_dx_hosted_private_virtual_interface_accepter" "test" {
+  provider = "awsalternate"
+
+  virtual_interface_id = aws_dx_hosted_private_virtual_interface.test.id
+  vpn_gateway_id       = aws_vpn_gateway.test.id
+}
+`, cid, rName, bgpAsn, vlan))
 }
 
 func testAccHostedPrivateVirtualInterfaceConfig_accepterTags(cid, rName string, bgpAsn, vlan int) string {
