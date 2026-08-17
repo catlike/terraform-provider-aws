@@ -13,8 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
+	tfdirectconnect "github.com/hashicorp/terraform-provider-aws/internal/service/directconnect"
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
@@ -23,10 +25,98 @@ func TestAccDirectConnectHostedTransitVirtualInterface_serial(t *testing.T) {
 
 	testCases := map[string]func(t *testing.T){
 		acctest.CtBasic: testAccHostedTransitVirtualInterface_basic,
+		acctest.CtName:  testAccHostedTransitVirtualInterface_name,
 		"accepterTags":  testAccHostedTransitVirtualInterface_accepterTags,
 	}
 
 	acctest.RunSerialTests1Level(t, testCases, 0)
+}
+
+func TestResourceHostedTransitVirtualInterface_schemaNameNotForceNew(t *testing.T) {
+	t.Parallel()
+
+	if tfdirectconnect.ResourceHostedTransitVirtualInterface().SchemaFunc()[names.AttrName].ForceNew {
+		t.Errorf("name schema ForceNew = true, want false")
+	}
+}
+
+func testAccHostedTransitVirtualInterface_name(t *testing.T) {
+	ctx := acctest.Context(t)
+	if testing.Short() {
+		t.Skip("skipping long-running test in short mode")
+	}
+	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
+
+	var (
+		vif   awstypes.VirtualInterface
+		vifID string
+	)
+	resourceName := "aws_dx_hosted_transit_virtual_interface.test"
+	accepterResourceName := "aws_dx_hosted_transit_virtual_interface_accepter.test"
+	rName := fmt.Sprintf("tf-testacc-hosted-transit-vif-%s", acctest.RandString(t, 9))
+	rNameUpdated := fmt.Sprintf("tf-testacc-hosted-transit-vif-%s", acctest.RandString(t, 9))
+	amzAsn := acctest.RandIntRange(t, 64512, 65534)
+	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
+	vlan := acctest.RandIntRange(t, 2049, 4094)
+
+	acctest.Test(ctx, t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			acctest.PreCheckAlternateAccount(t)
+		},
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5FactoriesAlternate(ctx, t),
+		CheckDestroy:             testAccCheckHostedTransitVirtualInterfaceDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccHostedTransitVirtualInterfaceConfig_name(connectionID, rName, rName, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckHostedTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rName),
+					resource.TestCheckResourceAttrPair(accepterResourceName, "virtual_interface_id", resourceName, names.AttrID),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						vifID = rs.Primary.ID
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccHostedTransitVirtualInterfaceConfig_name(connectionID, rName, rNameUpdated, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckHostedTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rNameUpdated),
+					resource.TestCheckResourceAttrPair(accepterResourceName, "virtual_interface_id", resourceName, names.AttrID),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						if rs.Primary.ID != vifID {
+							return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+						}
+
+						return nil
+					},
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
 }
 
 func testAccHostedTransitVirtualInterface_basic(t *testing.T) {
@@ -200,6 +290,41 @@ resource "aws_dx_gateway" "test" {
   name            = %[2]q
 }
 `, cid, rName, amzAsn, bgpAsn, vlan))
+}
+
+func testAccHostedTransitVirtualInterfaceConfig_name(cid, rName, vifName string, amzAsn, bgpAsn, vlan int) string {
+	return acctest.ConfigCompose(acctest.ConfigAlternateAccountProvider(), fmt.Sprintf(`
+resource "aws_dx_hosted_transit_virtual_interface" "test" {
+  address_family   = "ipv4"
+  bgp_asn          = %[5]d
+  connection_id    = %[1]q
+  name             = %[3]q
+  owner_account_id = data.aws_caller_identity.accepter.account_id
+  vlan             = %[6]d
+
+  # The aws_dx_hosted_transit_virtual_interface
+  # must be destroyed before the aws_dx_gateway.
+  depends_on = [aws_dx_gateway.test]
+}
+
+data "aws_caller_identity" "accepter" {
+  provider = "awsalternate"
+}
+
+resource "aws_dx_gateway" "test" {
+  provider = "awsalternate"
+
+  amazon_side_asn = %[4]d
+  name            = %[2]q
+}
+
+resource "aws_dx_hosted_transit_virtual_interface_accepter" "test" {
+  provider = "awsalternate"
+
+  dx_gateway_id        = aws_dx_gateway.test.id
+  virtual_interface_id = aws_dx_hosted_transit_virtual_interface.test.id
+}
+`, cid, rName, vifName, amzAsn, bgpAsn, vlan))
 }
 
 func testAccHostedTransitVirtualInterfaceConfig_basic(cid, rName string, amzAsn, bgpAsn, vlan int) string {
