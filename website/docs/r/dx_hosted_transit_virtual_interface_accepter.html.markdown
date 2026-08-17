@@ -70,6 +70,7 @@ This resource supports the following arguments:
 
 * `region` - (Optional) Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).
 * `dx_gateway_id` - (Required) The ID of the [Direct Connect gateway](dx_gateway.html) to which to connect the virtual interface.
+* `sitelink_enabled` - (Optional) Whether to enable SiteLink for the virtual interface. The value reported by AWS is stored in state.
 * `virtual_interface_id` - (Required) The ID of the Direct Connect virtual interface to accept.
 * `tags` - (Optional) A map of tags to assign to the resource. If configured with a provider [`default_tags` configuration block](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#default_tags-configuration-block) present, tags with matching keys will overwrite those defined at the provider-level.
 
@@ -86,6 +87,7 @@ This resource exports the following attributes in addition to the arguments abov
 [Configuration options](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts):
 
 - `create` - (Default `10m`)
+- `update` - (Default `10m`)
 - `delete` - (Default `10m`)
 
 ## Import

@@ -49,6 +49,11 @@ func resourceHostedTransitVirtualInterfaceAccepter() *schema.Resource {
 					Required: true,
 					ForceNew: true,
 				},
+				"sitelink_enabled": {
+					Type:     schema.TypeBool,
+					Optional: true,
+					Computed: true,
+				},
 				names.AttrTags:    tftags.TagsSchema(),
 				names.AttrTagsAll: tftags.TagsSchemaComputed(),
 				"virtual_interface_id": {
@@ -61,6 +66,7 @@ func resourceHostedTransitVirtualInterfaceAccepter() *schema.Resource {
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
+			Update: schema.DefaultTimeout(10 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 	}
@@ -126,6 +132,7 @@ func resourceHostedTransitVirtualInterfaceAccepterRead(ctx context.Context, d *s
 	}
 
 	d.Set("dx_gateway_id", vif.DirectConnectGatewayId)
+	d.Set("sitelink_enabled", vif.SiteLinkEnabled)
 	d.Set("virtual_interface_id", vif.VirtualInterfaceId)
 
 	return diags
@@ -133,10 +140,17 @@ func resourceHostedTransitVirtualInterfaceAccepterRead(ctx context.Context, d *s
 
 func resourceHostedTransitVirtualInterfaceAccepterUpdate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
 	var diags diag.Diagnostics
+	siteLinkChanged := d.HasChange("sitelink_enabled")
 
 	diags = append(diags, virtualInterfaceUpdate(ctx, d, meta)...)
 	if diags.HasError() {
 		return diags
+	}
+
+	if siteLinkChanged {
+		if _, err := waitHostedTransitVirtualInterfaceAccepterAvailable(ctx, meta.(*conns.AWSClient).DirectConnectClient(ctx), d.Id(), d.Timeout(schema.TimeoutUpdate)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Hosted Transit Virtual Interface Accepter (%s) update: %s", d.Id(), err)
+		}
 	}
 
 	return append(diags, resourceHostedTransitVirtualInterfaceAccepterRead(ctx, d, meta)...)
