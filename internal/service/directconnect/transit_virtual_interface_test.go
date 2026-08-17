@@ -13,8 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
+	tfdirectconnect "github.com/hashicorp/terraform-provider-aws/internal/service/directconnect"
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
@@ -23,11 +25,92 @@ func TestAccDirectConnectTransitVirtualInterface_serial(t *testing.T) {
 
 	testCases := map[string]func(t *testing.T){
 		acctest.CtBasic: testAccTransitVirtualInterface_basic,
+		acctest.CtName:  testAccTransitVirtualInterface_name,
 		"tags":          testAccTransitVirtualInterface_tags,
 		"sitelink":      testAccTransitVirtualInterface_siteLink,
 	}
 
 	acctest.RunSerialTests1Level(t, testCases, 0)
+}
+
+func TestResourceTransitVirtualInterface_schemaNameNotForceNew(t *testing.T) {
+	t.Parallel()
+
+	if tfdirectconnect.ResourceTransitVirtualInterface().SchemaFunc()[names.AttrName].ForceNew {
+		t.Errorf("name schema ForceNew = true, want false")
+	}
+}
+
+func testAccTransitVirtualInterface_name(t *testing.T) {
+	ctx := acctest.Context(t)
+	if testing.Short() {
+		t.Skip("skipping long-running test in short mode")
+	}
+	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
+
+	var (
+		vif   awstypes.VirtualInterface
+		vifID string
+	)
+	resourceName := "aws_dx_transit_virtual_interface.test"
+	rName := fmt.Sprintf("tf-testacc-transit-vif-%s", acctest.RandString(t, 9))
+	rNameUpdated := fmt.Sprintf("tf-testacc-transit-vif-%s", acctest.RandString(t, 9))
+	amzAsn := acctest.RandIntRange(t, 64512, 65534)
+	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
+	vlan := acctest.RandIntRange(t, 2049, 4094)
+
+	acctest.Test(ctx, t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckTransitVirtualInterfaceDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccTransitVirtualInterfaceConfig_name(connectionID, rName, rName, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						vifID = rs.Primary.ID
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccTransitVirtualInterfaceConfig_name(connectionID, rName, rNameUpdated, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rNameUpdated),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						if rs.Primary.ID != vifID {
+							return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+						}
+
+						return nil
+					},
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
 }
 
 func testAccTransitVirtualInterface_basic(t *testing.T) {
@@ -262,6 +345,19 @@ resource "aws_dx_gateway" "test" {
   amazon_side_asn = %[2]d
 }
 `, rName, amzAsn)
+}
+
+func testAccTransitVirtualInterfaceConfig_name(cid, rName, vifName string, amzAsn, bgpAsn, vlan int) string {
+	return acctest.ConfigCompose(testAccTransitVirtualInterfaceConfig_base(rName, amzAsn), fmt.Sprintf(`
+resource "aws_dx_transit_virtual_interface" "test" {
+  address_family = "ipv4"
+  bgp_asn        = %[4]d
+  dx_gateway_id  = aws_dx_gateway.test.id
+  connection_id  = %[1]q
+  name           = %[3]q
+  vlan           = %[5]d
+}
+`, cid, rName, vifName, bgpAsn, vlan))
 }
 
 func testAccTransitVirtualInterfaceConfig_basic(cid, rName string, amzAsn, bgpAsn, vlan int) string {

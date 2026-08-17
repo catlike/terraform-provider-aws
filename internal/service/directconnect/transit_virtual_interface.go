@@ -106,7 +106,6 @@ func resourceTransitVirtualInterface() *schema.Resource {
 				names.AttrName: {
 					Type:     schema.TypeString,
 					Required: true,
-					ForceNew: true,
 				},
 				"sitelink_enabled": {
 					Type:     schema.TypeBool,
@@ -220,14 +219,34 @@ func resourceTransitVirtualInterfaceRead(ctx context.Context, d *schema.Resource
 
 func resourceTransitVirtualInterfaceUpdate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
 	var diags diag.Diagnostics
+	conn := meta.(*conns.AWSClient).DirectConnectClient(ctx)
+
+	if d.HasChange(names.AttrName) {
+		input := &directconnect.UpdateVirtualInterfaceAttributesInput{
+			VirtualInterfaceId:   aws.String(d.Id()),
+			VirtualInterfaceName: aws.String(d.Get(names.AttrName).(string)),
+		}
+
+		_, err := conn.UpdateVirtualInterfaceAttributes(ctx, input)
+
+		if err != nil {
+			return sdkdiag.AppendErrorf(diags, "updating Direct Connect Transit Virtual Interface (%s) name: %s", d.Id(), err)
+		}
+	}
 
 	diags = append(diags, virtualInterfaceUpdate(ctx, d, meta)...)
 	if diags.HasError() {
 		return diags
 	}
 
-	if _, err := waitTransitVirtualInterfaceAvailable(ctx, meta.(*conns.AWSClient).DirectConnectClient(ctx), d.Id(), d.Timeout(schema.TimeoutUpdate)); err != nil {
+	if _, err := waitTransitVirtualInterfaceAvailable(ctx, conn, d.Id(), d.Timeout(schema.TimeoutUpdate)); err != nil {
 		return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Transit Virtual Interface (%s) update: %s", d.Id(), err)
+	}
+
+	if d.HasChange(names.AttrName) {
+		if _, err := waitVirtualInterfaceNameUpdated(ctx, conn, d.Id(), d.Get(names.AttrName).(string), d.Timeout(schema.TimeoutUpdate)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Transit Virtual Interface (%s) name update: %s", d.Id(), err)
+		}
 	}
 
 	return append(diags, resourceTransitVirtualInterfaceRead(ctx, d, meta)...)

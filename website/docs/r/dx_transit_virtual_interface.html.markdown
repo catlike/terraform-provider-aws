@@ -39,7 +39,7 @@ This resource supports the following arguments:
 * `bgp_asn` - (Required) The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
 * `connection_id` - (Required) The ID of the Direct Connect connection (or LAG) on which to create the virtual interface.
 * `dx_gateway_id` - (Required) The ID of the Direct Connect gateway to which to connect the virtual interface.
-* `name` - (Required) The name for the virtual interface.
+* `name` - (Required) Name for the virtual interface. Updating this argument performs an in-place update.
 * `vlan` - (Required) The VLAN ID.
 * `amazon_address` - (Optional) The IPv4 CIDR address to use to send traffic to Amazon. Required for IPv4 BGP peers.
 * `bgp_auth_key` - (Optional) The authentication key for BGP configuration.
