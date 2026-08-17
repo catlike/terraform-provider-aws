@@ -40,7 +40,7 @@ This resource supports the following arguments:
 * `address_family` - (Required) The address family for the BGP peer. `ipv4 ` or `ipv6`.
 * `bgp_asn` - (Required) The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
 * `connection_id` - (Required) The ID of the Direct Connect connection (or LAG) on which to create the virtual interface.
-* `name` - (Required) The name for the virtual interface.
+* `name` - (Required) Name for the virtual interface. Updating this argument performs an in-place update after the owner account accepts the hosted virtual interface.
 * `owner_account_id` - (Required) The AWS account that will own the new virtual interface.
 * `route_filter_prefixes` - (Required) A list of routes to be advertised to the AWS network in this region.
 * `vlan` - (Required) The VLAN ID.
@@ -61,6 +61,7 @@ This resource exports the following attributes in addition to the arguments abov
 [Configuration options](https://developer.hashicorp.com/terraform/language/resources/syntax#operation-timeouts):
 
 - `create` - (Default `10m`)
+- `update` - (Default `10m`)
 - `delete` - (Default `10m`)
 
 ## Import

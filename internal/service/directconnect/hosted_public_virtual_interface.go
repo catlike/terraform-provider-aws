@@ -32,6 +32,7 @@ func resourceHostedPublicVirtualInterface() *schema.Resource {
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceHostedPublicVirtualInterfaceCreate,
 		ReadWithoutTimeout:   resourceHostedPublicVirtualInterfaceRead,
+		UpdateWithoutTimeout: resourceHostedPublicVirtualInterfaceUpdate,
 		DeleteWithoutTimeout: resourceHostedPublicVirtualInterfaceDelete,
 
 		Importer: &schema.ResourceImporter{
@@ -91,7 +92,6 @@ func resourceHostedPublicVirtualInterface() *schema.Resource {
 				names.AttrName: {
 					Type:     schema.TypeString,
 					Required: true,
-					ForceNew: true,
 				},
 				names.AttrOwnerAccountID: {
 					Type:         schema.TypeString,
@@ -117,6 +117,7 @@ func resourceHostedPublicVirtualInterface() *schema.Resource {
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
+			Update: schema.DefaultTimeout(10 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 	}
@@ -208,6 +209,30 @@ func resourceHostedPublicVirtualInterfaceRead(ctx context.Context, d *schema.Res
 	d.Set("vlan", vif.Vlan)
 
 	return diags
+}
+
+func resourceHostedPublicVirtualInterfaceUpdate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
+	var diags diag.Diagnostics
+	conn := meta.(*conns.AWSClient).DirectConnectClient(ctx)
+
+	if d.HasChange(names.AttrName) {
+		input := &directconnect.UpdateVirtualInterfaceAttributesInput{
+			VirtualInterfaceId:   aws.String(d.Id()),
+			VirtualInterfaceName: aws.String(d.Get(names.AttrName).(string)),
+		}
+
+		_, err := conn.UpdateVirtualInterfaceAttributes(ctx, input)
+
+		if err != nil {
+			return sdkdiag.AppendErrorf(diags, "updating Direct Connect Hosted Public Virtual Interface (%s) name: %s", d.Id(), err)
+		}
+
+		if _, err := waitVirtualInterfaceNameUpdated(ctx, conn, d.Id(), d.Get(names.AttrName).(string), d.Timeout(schema.TimeoutUpdate)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Hosted Public Virtual Interface (%s) name update: %s", d.Id(), err)
+		}
+	}
+
+	return append(diags, resourceHostedPublicVirtualInterfaceRead(ctx, d, meta)...)
 }
 
 func resourceHostedPublicVirtualInterfaceDelete(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {

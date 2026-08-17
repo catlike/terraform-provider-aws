@@ -13,8 +13,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-provider-aws/internal/acctest"
+	tfdirectconnect "github.com/hashicorp/terraform-provider-aws/internal/service/directconnect"
 	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
@@ -66,6 +68,104 @@ func TestAccDirectConnectHostedPublicVirtualInterface_basic(t *testing.T) {
 			},
 			{
 				Config:            testAccHostedPublicVirtualInterfaceConfig_basic(connectionID, rName, amazonAddress, customerAddress, bgpAsn, vlan),
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestResourceHostedPublicVirtualInterface_schemaNameNotForceNew(t *testing.T) {
+	t.Parallel()
+
+	if tfdirectconnect.ResourceHostedPublicVirtualInterface().SchemaFunc()[names.AttrName].ForceNew {
+		t.Errorf("name schema ForceNew = true, want false")
+	}
+}
+
+func TestAccDirectConnectHostedPublicVirtualInterface_name(t *testing.T) {
+	ctx := acctest.Context(t)
+	if testing.Short() {
+		t.Skip("skipping long-running test in short mode")
+	}
+	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
+
+	var (
+		vif   awstypes.VirtualInterface
+		vifID string
+	)
+	resourceName := "aws_dx_hosted_public_virtual_interface.test"
+	accepterResourceName := "aws_dx_hosted_public_virtual_interface_accepter.test"
+	rName := fmt.Sprintf("tf-testacc-hosted-public-vif-%s", acctest.RandString(t, 9))
+	rNameUpdated := fmt.Sprintf("tf-testacc-hosted-public-vif-%s", acctest.RandString(t, 9))
+	amazonAddress := "175.45.176.9/28"
+	customerAddress := "175.45.176.10/28"
+	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
+	vlan := acctest.RandIntRange(t, 2049, 4094)
+
+	acctest.ParallelTest(ctx, t, resource.TestCase{
+		PreCheck: func() {
+			acctest.PreCheck(ctx, t)
+			acctest.PreCheckAlternateAccount(t)
+		},
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5FactoriesAlternate(ctx, t),
+		CheckDestroy:             testAccCheckHostedPublicVirtualInterfaceDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccHostedPublicVirtualInterfaceConfig_name(connectionID, rName, amazonAddress, customerAddress, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckHostedPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, "amazon_address", amazonAddress),
+					resource.TestCheckResourceAttr(resourceName, "customer_address", customerAddress),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rName),
+					resource.TestCheckResourceAttr(resourceName, "route_filter_prefixes.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "route_filter_prefixes.*", "210.52.110.0/24"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "route_filter_prefixes.*", "175.45.180.0/22"),
+					resource.TestCheckResourceAttrPair(accepterResourceName, "virtual_interface_id", resourceName, names.AttrID),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						vifID = rs.Primary.ID
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccHostedPublicVirtualInterfaceConfig_name(connectionID, rNameUpdated, amazonAddress, customerAddress, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckHostedPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, "amazon_address", amazonAddress),
+					resource.TestCheckResourceAttr(resourceName, "customer_address", customerAddress),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rNameUpdated),
+					resource.TestCheckResourceAttr(resourceName, "route_filter_prefixes.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "route_filter_prefixes.*", "210.52.110.0/24"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "route_filter_prefixes.*", "175.45.180.0/22"),
+					resource.TestCheckResourceAttrPair(accepterResourceName, "virtual_interface_id", resourceName, names.AttrID),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						if rs.Primary.ID != vifID {
+							return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+						}
+
+						return nil
+					},
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateVerify: true,
@@ -198,6 +298,36 @@ resource "aws_dx_hosted_public_virtual_interface_accepter" "test" {
   virtual_interface_id = aws_dx_hosted_public_virtual_interface.test.id
 }
 `)
+}
+
+func testAccHostedPublicVirtualInterfaceConfig_name(cid, rName, amzAddr, custAddr string, bgpAsn, vlan int) string {
+	return acctest.ConfigCompose(acctest.ConfigAlternateAccountProvider(), fmt.Sprintf(`
+resource "aws_dx_hosted_public_virtual_interface" "test" {
+  address_family   = "ipv4"
+  amazon_address   = %[3]q
+  bgp_asn          = %[5]d
+  connection_id    = %[1]q
+  customer_address = %[4]q
+  name             = %[2]q
+  owner_account_id = data.aws_caller_identity.accepter.account_id
+  vlan             = %[6]d
+
+  route_filter_prefixes = [
+    "210.52.110.0/24",
+    "175.45.180.0/22",
+  ]
+}
+
+data "aws_caller_identity" "accepter" {
+  provider = "awsalternate"
+}
+
+resource "aws_dx_hosted_public_virtual_interface_accepter" "test" {
+  provider = "awsalternate"
+
+  virtual_interface_id = aws_dx_hosted_public_virtual_interface.test.id
+}
+`, cid, rName, amzAddr, custAddr, bgpAsn, vlan))
 }
 
 func testAccHostedPublicVirtualInterfaceConfig_accepterTags(cid, rName, amzAddr, custAddr string, bgpAsn, vlan int) string {
