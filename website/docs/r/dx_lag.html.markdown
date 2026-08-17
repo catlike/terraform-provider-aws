@@ -31,6 +31,8 @@ This resource supports the following arguments:
 * `name` - (Required) The name of the LAG.
 * `connections_bandwidth` - (Required) The bandwidth of the individual dedicated connections bundled by the LAG. Valid values: 1Gbps, 10Gbps, 100Gbps, and 400Gbps. Case sensitive. Refer to the AWS Direct Connection supported bandwidths for [Dedicated Connections](https://docs.aws.amazon.com/directconnect/latest/UserGuide/dedicated_connection.html).
 * `location` - (Required) The AWS Direct Connect location in which the LAG should be allocated. See [DescribeLocations](https://docs.aws.amazon.com/directconnect/latest/APIReference/API_DescribeLocations.html) for the list of AWS Direct Connect locations. Use `locationCode`.
+* `minimum_links` - (Optional) The minimum number of physical dedicated connections that must be operational for the LAG to be operational. Valid values are `1` through `4`. If omitted, the service-reported default is used. Because the AWS SDK omits zero-valued fields, this argument cannot explicitly set or reset the value to `0`.
+  ~> **Warning:** Increasing this value can make the LAG unavailable until enough member connections are operational. Ensure the value is compatible with the number of connections in the LAG.
 * `connection_id` - (Optional) The ID of an existing dedicated connection to migrate to the LAG.
 * `force_destroy` - (Optional, Default:false) A boolean that indicates all connections associated with the LAG should be deleted so that the LAG can be destroyed without error. These objects are *not* recoverable.
 * `provider_name` - (Optional) The name of the service provider associated with the LAG.

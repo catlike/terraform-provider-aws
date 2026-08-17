@@ -17,6 +17,7 @@ import (
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"github.com/hashicorp/terraform-provider-aws/internal/conns"
 	"github.com/hashicorp/terraform-provider-aws/internal/enum"
 	"github.com/hashicorp/terraform-provider-aws/internal/errs"
@@ -70,6 +71,12 @@ func resourceLag() *schema.Resource {
 				"jumbo_frame_capable": {
 					Type:     schema.TypeBool,
 					Computed: true,
+				},
+				"minimum_links": {
+					Type:         schema.TypeInt,
+					Optional:     true,
+					Computed:     true,
+					ValidateFunc: validation.IntBetween(1, 4),
 				},
 				names.AttrLocation: {
 					Type:     schema.TypeString,
@@ -137,6 +144,12 @@ func resourceLagCreate(ctx context.Context, d *schema.ResourceData, meta any) di
 		}
 	}
 
+	if _, ok := d.GetOk("minimum_links"); ok {
+		if err := updateLag(ctx, conn, d, false, true); err != nil {
+			return sdkdiag.AppendErrorf(diags, "updating Direct Connect LAG (%s): %s", d.Id(), err)
+		}
+	}
+
 	return append(diags, resourceLagRead(ctx, d, meta)...)
 }
 
@@ -168,6 +181,9 @@ func resourceLagRead(ctx context.Context, d *schema.ResourceData, meta any) diag
 	d.Set("has_logical_redundancy", lag.HasLogicalRedundancy)
 	d.Set("jumbo_frame_capable", lag.JumboFrameCapable)
 	d.Set(names.AttrLocation, lag.Location)
+	if err := d.Set("minimum_links", lag.MinimumLinks); err != nil {
+		return sdkdiag.AppendErrorf(diags, "setting Direct Connect LAG (%s) minimum links: %s", d.Id(), err)
+	}
 	d.Set(names.AttrName, lag.LagName)
 	d.Set(names.AttrOwnerAccountID, lag.OwnerAccount)
 	d.Set(names.AttrProviderName, lag.ProviderName)
@@ -179,20 +195,37 @@ func resourceLagUpdate(ctx context.Context, d *schema.ResourceData, meta any) di
 	var diags diag.Diagnostics
 	conn := meta.(*conns.AWSClient).DirectConnectClient(ctx)
 
-	if d.HasChange(names.AttrName) {
-		input := &directconnect.UpdateLagInput{
-			LagId:   aws.String(d.Id()),
-			LagName: aws.String(d.Get(names.AttrName).(string)),
-		}
-
-		_, err := conn.UpdateLag(ctx, input)
-
-		if err != nil {
+	updateName := d.HasChange(names.AttrName)
+	updateMinimumLinks := d.HasChange("minimum_links")
+	if updateName || updateMinimumLinks {
+		if err := updateLag(ctx, conn, d, updateName, updateMinimumLinks); err != nil {
 			return sdkdiag.AppendErrorf(diags, "updating Direct Connect LAG (%s): %s", d.Id(), err)
 		}
 	}
 
 	return append(diags, resourceLagRead(ctx, d, meta)...)
+}
+
+func updateLag(ctx context.Context, conn *directconnect.Client, d *schema.ResourceData, updateName, updateMinimumLinks bool) error {
+	if !updateName && !updateMinimumLinks {
+		return nil
+	}
+
+	input := &directconnect.UpdateLagInput{
+		LagId: aws.String(d.Id()),
+	}
+
+	if updateName {
+		input.LagName = aws.String(d.Get(names.AttrName).(string))
+	}
+
+	if updateMinimumLinks {
+		input.MinimumLinks = int32(d.Get("minimum_links").(int))
+	}
+
+	_, err := conn.UpdateLag(ctx, input)
+
+	return err
 }
 
 func resourceLagDelete(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {

@@ -42,6 +42,7 @@ func TestAccDirectConnectLag_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, names.AttrForceDestroy, acctest.CtFalse),
 					resource.TestCheckResourceAttrSet(resourceName, "has_logical_redundancy"),
 					resource.TestCheckResourceAttrSet(resourceName, "jumbo_frame_capable"),
+					resource.TestCheckResourceAttr(resourceName, "minimum_links", "0"),
 					resource.TestCheckResourceAttrSet(resourceName, names.AttrLocation),
 					resource.TestCheckResourceAttr(resourceName, names.AttrName, rName1),
 					acctest.CheckResourceAttrAccountID(ctx, resourceName, names.AttrOwnerAccountID),
@@ -59,12 +60,62 @@ func TestAccDirectConnectLag_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, names.AttrForceDestroy, acctest.CtFalse),
 					resource.TestCheckResourceAttrSet(resourceName, "has_logical_redundancy"),
 					resource.TestCheckResourceAttrSet(resourceName, "jumbo_frame_capable"),
+					resource.TestCheckResourceAttr(resourceName, "minimum_links", "0"),
 					resource.TestCheckResourceAttrSet(resourceName, names.AttrLocation),
 					resource.TestCheckResourceAttr(resourceName, names.AttrName, rName2),
 					acctest.CheckResourceAttrAccountID(ctx, resourceName, names.AttrOwnerAccountID),
 					resource.TestCheckResourceAttr(resourceName, names.AttrProviderName, ""),
 					resource.TestCheckResourceAttr(resourceName, acctest.CtTagsPercent, "0"),
 				),
+			},
+			{
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{names.AttrForceDestroy},
+			},
+		},
+	})
+}
+
+func TestAccDirectConnectLag_minimumLinks(t *testing.T) {
+	ctx := acctest.Context(t)
+	var lag awstypes.Lag
+	resourceName := "aws_dx_lag.test"
+	rName1 := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
+	rName2 := acctest.RandomWithPrefix(t, acctest.ResourcePrefix)
+
+	acctest.ParallelTest(ctx, t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckLagDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccLagConfig_minimumLinks(rName1, 1),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLagExists(ctx, t, resourceName, &lag),
+					resource.TestCheckResourceAttr(resourceName, "minimum_links", "1"),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rName1),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionCreate),
+					},
+				},
+			},
+			{
+				Config: testAccLagConfig_minimumLinks(rName2, 2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLagExists(ctx, t, resourceName, &lag),
+					resource.TestCheckResourceAttr(resourceName, "minimum_links", "2"),
+					resource.TestCheckResourceAttr(resourceName, names.AttrName, rName2),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
 			},
 			{
 				ResourceName:            resourceName,
@@ -294,6 +345,19 @@ resource "aws_dx_lag" "test" {
   location              = tolist(data.aws_dx_locations.test.location_codes)[0]
 }
 `, rName)
+}
+
+func testAccLagConfig_minimumLinks(rName string, minimumLinks int) string {
+	return fmt.Sprintf(`
+data "aws_dx_locations" "test" {}
+
+resource "aws_dx_lag" "test" {
+  name                  = %[1]q
+  connections_bandwidth = "10Gbps"
+  location              = tolist(data.aws_dx_locations.test.location_codes)[0]
+  minimum_links         = %[2]d
+}
+`, rName, minimumLinks)
 }
 
 func testAccLagConfig_connectionID(rName string) string {
