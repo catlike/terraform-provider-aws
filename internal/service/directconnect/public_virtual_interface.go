@@ -93,7 +93,6 @@ func resourcePublicVirtualInterface() *schema.Resource {
 				names.AttrName: {
 					Type:     schema.TypeString,
 					Required: true,
-					ForceNew: true,
 				},
 				"route_filter_prefixes": {
 					Type:     schema.TypeSet,
@@ -115,6 +114,7 @@ func resourcePublicVirtualInterface() *schema.Resource {
 
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
+			Update: schema.DefaultTimeout(10 * time.Minute),
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 	}
@@ -209,10 +209,30 @@ func resourcePublicVirtualInterfaceRead(ctx context.Context, d *schema.ResourceD
 
 func resourcePublicVirtualInterfaceUpdate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
 	var diags diag.Diagnostics
+	conn := meta.(*conns.AWSClient).DirectConnectClient(ctx)
+
+	if d.HasChange(names.AttrName) {
+		input := &directconnect.UpdateVirtualInterfaceAttributesInput{
+			VirtualInterfaceId:   aws.String(d.Id()),
+			VirtualInterfaceName: aws.String(d.Get(names.AttrName).(string)),
+		}
+
+		_, err := conn.UpdateVirtualInterfaceAttributes(ctx, input)
+
+		if err != nil {
+			return sdkdiag.AppendErrorf(diags, "updating Direct Connect Public Virtual Interface (%s) name: %s", d.Id(), err)
+		}
+	}
 
 	diags = append(diags, virtualInterfaceUpdate(ctx, d, meta)...)
 	if diags.HasError() {
 		return diags
+	}
+
+	if d.HasChange(names.AttrName) {
+		if _, err := waitVirtualInterfaceNameUpdated(ctx, conn, d.Id(), d.Get(names.AttrName).(string), d.Timeout(schema.TimeoutUpdate)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Public Virtual Interface (%s) name update: %s", d.Id(), err)
+		}
 	}
 
 	return append(diags, resourcePublicVirtualInterfaceRead(ctx, d, meta)...)
