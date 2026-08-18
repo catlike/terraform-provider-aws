@@ -99,8 +99,8 @@ func TestAccDirectConnectHostedPublicVirtualInterface_name(t *testing.T) {
 	accepterResourceName := "aws_dx_hosted_public_virtual_interface_accepter.test"
 	rName := fmt.Sprintf("tf-testacc-hosted-public-vif-%s", acctest.RandString(t, 9))
 	rNameUpdated := fmt.Sprintf("tf-testacc-hosted-public-vif-%s", acctest.RandString(t, 9))
-	amazonAddress := "175.45.176.9/28"
-	customerAddress := "175.45.176.10/28"
+	amazonAddress := "175.45.180.9/28"
+	customerAddress := "175.45.180.10/28"
 	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
 	vlan := acctest.RandIntRange(t, 2049, 4094)
 
