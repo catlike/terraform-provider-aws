@@ -110,17 +110,29 @@ func findVirtualInterface(ctx context.Context, conn *directconnect.Client, input
 }
 
 func findVirtualInterfaces(ctx context.Context, conn *directconnect.Client, input *directconnect.DescribeVirtualInterfacesInput, filter tfslices.Predicate[*awstypes.VirtualInterface]) ([]awstypes.VirtualInterface, error) {
-	output, err := conn.DescribeVirtualInterfaces(ctx, input)
+	input.MaxResults = aws.Int32(100)
+
+	var output []awstypes.VirtualInterface
+	var pageSeen bool
+
+	err := describeVirtualInterfacesPages(ctx, conn, input, func(page *directconnect.DescribeVirtualInterfacesOutput, lastPage bool) bool {
+		if page == nil {
+			return !lastPage
+		}
+		pageSeen = true
+		output = append(output, tfslices.Filter(page.VirtualInterfaces, tfslices.PredicateValue(filter))...)
+
+		return !lastPage
+	})
 
 	if err != nil {
 		return nil, err
 	}
-
-	if output == nil {
+	if !pageSeen {
 		return nil, tfresource.NewEmptyResultError()
 	}
 
-	return tfslices.Filter(output.VirtualInterfaces, tfslices.PredicateValue(filter)), nil
+	return output, nil
 }
 
 func statusVirtualInterface(conn *directconnect.Client, id string) retry.StateRefreshFunc {
