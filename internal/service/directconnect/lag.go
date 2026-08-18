@@ -43,7 +43,19 @@ func resourceLag() *schema.Resource {
 
 		SchemaFunc: func() map[string]*schema.Schema {
 			return map[string]*schema.Schema{
+				"allows_hosted_connections": {
+					Type:     schema.TypeBool,
+					Computed: true,
+				},
 				names.AttrARN: {
+					Type:     schema.TypeString,
+					Computed: true,
+				},
+				"aws_device": {
+					Type:     schema.TypeString,
+					Computed: true,
+				},
+				"aws_logical_device_id": {
 					Type:     schema.TypeString,
 					Computed: true,
 				},
@@ -69,6 +81,10 @@ func resourceLag() *schema.Resource {
 				},
 				"jumbo_frame_capable": {
 					Type:     schema.TypeBool,
+					Computed: true,
+				},
+				"lag_state": {
+					Type:     schema.TypeString,
 					Computed: true,
 				},
 				names.AttrLocation: {
@@ -164,9 +180,13 @@ func resourceLagRead(ctx context.Context, d *schema.ResourceData, meta any) diag
 		Resource:  fmt.Sprintf("dxlag/%s", d.Id()),
 	}.String()
 	d.Set(names.AttrARN, arn)
+	d.Set("allows_hosted_connections", lag.AllowsHostedConnections)
+	d.Set("aws_device", lag.AwsDeviceV2)
+	d.Set("aws_logical_device_id", lag.AwsLogicalDeviceId)
 	d.Set("connections_bandwidth", lag.ConnectionsBandwidth)
 	d.Set("has_logical_redundancy", lag.HasLogicalRedundancy)
 	d.Set("jumbo_frame_capable", lag.JumboFrameCapable)
+	d.Set("lag_state", lag.LagState)
 	d.Set(names.AttrLocation, lag.Location)
 	d.Set(names.AttrName, lag.LagName)
 	d.Set(names.AttrOwnerAccountID, lag.OwnerAccount)

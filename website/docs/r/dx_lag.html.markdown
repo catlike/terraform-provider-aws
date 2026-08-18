@@ -40,10 +40,14 @@ This resource supports the following arguments:
 
 This resource exports the following attributes in addition to the arguments above:
 
+* `allows_hosted_connections` - Whether the LAG can host other connections.
 * `arn` - The ARN of the LAG.
+* `aws_device` - Direct Connect endpoint that hosts the LAG.
+* `aws_logical_device_id` - Direct Connect endpoint that terminates the logical connection. This device might be different than the device that terminates the physical connection.
 * `has_logical_redundancy` - Indicates whether the LAG supports a secondary BGP peer in the same address family (IPv4/IPv6).
 * `id` - The ID of the LAG.
-* `jumbo_frame_capable` -Indicates whether jumbo frames (9001 MTU) are supported.
+* `jumbo_frame_capable` - Indicates whether jumbo frames (9001 MTU) are supported.
+* `lag_state` - State of the LAG.
 * `owner_account_id` - The ID of the AWS account that owns the LAG.
 * `tags_all` - A map of tags assigned to the resource, including those inherited from the provider [`default_tags` configuration block](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#default_tags-configuration-block).
 

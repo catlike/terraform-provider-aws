@@ -6,9 +6,11 @@ package directconnect_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/YakDriver/regexache"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/directconnect/types"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
@@ -36,6 +38,7 @@ func TestAccDirectConnectLag_basic(t *testing.T) {
 				Config: testAccLagConfig_basic(rName1),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckLagExists(ctx, t, resourceName, &lag),
+					testAccCheckLagOperationalFields(resourceName, &lag),
 					acctest.MatchResourceAttrRegionalARN(ctx, resourceName, names.AttrARN, "directconnect", regexache.MustCompile(`dxlag/.+`)),
 					resource.TestCheckNoResourceAttr(resourceName, names.AttrConnectionID),
 					resource.TestCheckResourceAttr(resourceName, "connections_bandwidth", "10Gbps"),
@@ -53,6 +56,7 @@ func TestAccDirectConnectLag_basic(t *testing.T) {
 				Config: testAccLagConfig_basic(rName2),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckLagExists(ctx, t, resourceName, &lag),
+					testAccCheckLagOperationalFields(resourceName, &lag),
 					acctest.MatchResourceAttrRegionalARN(ctx, resourceName, names.AttrARN, "directconnect", regexache.MustCompile(`dxlag/.+`)),
 					resource.TestCheckNoResourceAttr(resourceName, names.AttrConnectionID),
 					resource.TestCheckResourceAttr(resourceName, "connections_bandwidth", "10Gbps"),
@@ -279,6 +283,29 @@ func testAccCheckLagExists(ctx context.Context, t *testing.T, name string, v *aw
 		}
 
 		*v = *output
+
+		return nil
+	}
+}
+
+func testAccCheckLagOperationalFields(name string, lag *awstypes.Lag) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[name]
+		if !ok {
+			return fmt.Errorf("Not found: %s", name)
+		}
+
+		expected := map[string]string{
+			"allows_hosted_connections": strconv.FormatBool(lag.AllowsHostedConnections),
+			"aws_device":                aws.ToString(lag.AwsDeviceV2),
+			"aws_logical_device_id":     aws.ToString(lag.AwsLogicalDeviceId),
+			"lag_state":                 string(lag.LagState),
+		}
+		for attribute, want := range expected {
+			if got := rs.Primary.Attributes[attribute]; got != want {
+				return fmt.Errorf("%s = %q, want %q", attribute, got, want)
+			}
+		}
 
 		return nil
 	}
