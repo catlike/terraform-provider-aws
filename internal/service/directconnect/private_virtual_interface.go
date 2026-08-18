@@ -40,6 +40,8 @@ func resourcePrivateVirtualInterface() *schema.Resource {
 			StateContext: resourcePrivateVirtualInterfaceImport,
 		},
 
+		CustomizeDiff: resourcePrivateVirtualInterfaceCustomizeDiff,
+
 		SchemaFunc: func() map[string]*schema.Schema {
 			return map[string]*schema.Schema{
 				"address_family": {
@@ -80,7 +82,6 @@ func resourcePrivateVirtualInterface() *schema.Resource {
 				names.AttrConnectionID: {
 					Type:     schema.TypeString,
 					Required: true,
-					ForceNew: true,
 				},
 				"customer_address": {
 					Type:     schema.TypeString,
@@ -135,6 +136,22 @@ func resourcePrivateVirtualInterface() *schema.Resource {
 			Delete: schema.DefaultTimeout(10 * time.Minute),
 		},
 	}
+}
+
+func resourcePrivateVirtualInterfaceCustomizeDiff(_ context.Context, diff *schema.ResourceDiff, _ any) error {
+	if err := validatePrivateVirtualInterfaceConnectionMTUChange(diff.Id() == "", diff.HasChange(names.AttrConnectionID), diff.HasChange("mtu")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validatePrivateVirtualInterfaceConnectionMTUChange(isNew, connectionIDChanged, mtuChanged bool) error {
+	if !isNew && connectionIDChanged && mtuChanged {
+		return fmt.Errorf("cannot update connection_id and mtu simultaneously; apply the connection and MTU changes separately")
+	}
+
+	return nil
 }
 
 func resourcePrivateVirtualInterfaceCreate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
@@ -261,6 +278,16 @@ func resourcePrivateVirtualInterfaceUpdate(ctx context.Context, d *schema.Resour
 	if d.HasChange(names.AttrName) {
 		if _, err := waitVirtualInterfaceNameUpdated(ctx, conn, d.Id(), d.Get(names.AttrName).(string), d.Timeout(schema.TimeoutUpdate)); err != nil {
 			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Private Virtual Interface (%s) name update: %s", d.Id(), err)
+		}
+	}
+
+	if err := virtualInterfaceReassociate(ctx, conn, d); err != nil {
+		return sdkdiag.AppendFromErr(diags, err)
+	}
+
+	if d.HasChange(names.AttrConnectionID) {
+		if _, err := waitPrivateVirtualInterfaceAvailable(ctx, conn, d.Id(), d.Timeout(schema.TimeoutUpdate)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Private Virtual Interface (%s) reassociation: %s", d.Id(), err)
 		}
 	}
 

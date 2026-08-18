@@ -5,6 +5,7 @@ package directconnect
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-provider-aws/internal/retry"
 	tfslices "github.com/hashicorp/terraform-provider-aws/internal/slices"
 	"github.com/hashicorp/terraform-provider-aws/internal/tfresource"
+	"github.com/hashicorp/terraform-provider-aws/names"
 )
 
 func virtualInterfaceUpdate(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
@@ -53,6 +55,24 @@ func virtualInterfaceUpdate(ctx context.Context, d *schema.ResourceData, meta an
 	}
 
 	return diags
+}
+
+func virtualInterfaceReassociate(ctx context.Context, conn *directconnect.Client, d *schema.ResourceData) error {
+	if !d.HasChange(names.AttrConnectionID) {
+		return nil
+	}
+
+	targetConnectionID := d.Get(names.AttrConnectionID).(string)
+	input := &directconnect.AssociateVirtualInterfaceInput{
+		ConnectionId:       aws.String(targetConnectionID),
+		VirtualInterfaceId: aws.String(d.Id()),
+	}
+
+	if _, err := conn.AssociateVirtualInterface(ctx, input); err != nil {
+		return fmt.Errorf("associating Direct Connect Virtual Interface (%s) with target connection or LAG (%s): %w", d.Id(), targetConnectionID, err)
+	}
+
+	return nil
 }
 
 func virtualInterfaceDelete(ctx context.Context, d *schema.ResourceData, meta any) diag.Diagnostics {
