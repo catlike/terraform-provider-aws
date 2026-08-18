@@ -31,7 +31,7 @@ This resource supports the following arguments:
 * `region` - (Optional) Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).
 * `address_family` - (Required) The address family for the BGP peer. `ipv4 ` or `ipv6`.
 * `bgp_asn` - (Required) The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
-* `connection_id` - (Required) The ID of the Direct Connect connection (or LAG) on which to create the virtual interface.
+* `connection_id` - (Required) ID of the Direct Connect connection or LAG hosting the virtual interface. Updating this argument reassociates the existing hosted virtual interface without changing its ID.
 * `name` - (Required) Name for the virtual interface. Updating this argument performs an in-place update after the owner account accepts the hosted virtual interface.
 * `owner_account_id` - (Required) The AWS account that will own the new virtual interface.
 * `vlan` - (Required) The VLAN ID.
@@ -39,6 +39,16 @@ This resource supports the following arguments:
 * `mtu` - (Optional) The maximum transmission unit (MTU) is the size, in bytes, of the largest permissible packet that can be passed over the connection. The MTU of a virtual private interface can be either `1500` or `9001` (jumbo frames). Default is `1500`.
 * `bgp_auth_key` - (Optional) The authentication key for BGP configuration.
 * `customer_address` - (Optional) The IPv4 CIDR destination address to which Amazon should send traffic. Required for IPv4 BGP peers.
+
+### Reassociation
+
+Updating `connection_id` reassociates the existing hosted private virtual interface; it does not create a new VIF. The allocator account managing this resource must own the target connection or LAG and either the VIF or its current connection. `owner_account_id` remains the account that owns the hosted VIF and cannot be changed. The owner account must accept the allocation (for example, with [`aws_dx_hosted_private_virtual_interface_accepter`](dx_hosted_private_virtual_interface_accepter.html.markdown)); its Direct Connect gateway or virtual private gateway association remains in place while the allocator moves the VIF.
+
+Before changing `connection_id`, ensure that the hosted VIF and target are available for reassociation. The target must be compatible with the VIF's existing VLAN and BGP peer IP addressing; a conflicting VLAN or Amazon/customer IP address prevents the reassociation. This resource does not change those allocation settings during reassociation.
+
+Reassociation can interrupt connectivity while the VIF moves and BGP sessions reconverge. Plan for traffic loss and verify the BGP configuration and reachability on the target before applying the change.
+
+A LAG ID can be used as the target only when the VIF is not associated with a hosted connection. A VIF on a hosted connection cannot be moved to a LAG; migrate the hosted connection and its VIFs with `AssociateHostedConnection` instead.
 
 ## Attribute Reference
 
