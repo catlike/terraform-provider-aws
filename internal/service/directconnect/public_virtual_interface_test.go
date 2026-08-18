@@ -191,19 +191,7 @@ func TestAccDirectConnectPublicVirtualInterface_reassociation(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
 					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
-					func(s *terraform.State) error {
-						rs, ok := s.RootModule().Resources[resourceName]
-						if !ok {
-							return fmt.Errorf("Not found: %s", resourceName)
-						}
-
-						vifID = rs.Primary.ID
-						if aws.ToString(vif.ConnectionId) != connectionID {
-							return fmt.Errorf("remote connection ID = %s, want %s", aws.ToString(vif.ConnectionId), connectionID)
-						}
-
-						return nil
-					},
+					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, connectionID, &vifID, &vif),
 				),
 			},
 			{
@@ -211,7 +199,7 @@ func TestAccDirectConnectPublicVirtualInterface_reassociation(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
 					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, targetConnectionID),
-					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, vifID, targetConnectionID, &vif),
+					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, targetConnectionID, &vifID, &vif),
 				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -224,7 +212,7 @@ func TestAccDirectConnectPublicVirtualInterface_reassociation(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
 					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
-					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID, &vif),
+					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, connectionID, &vifID, &vif),
 				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -326,15 +314,17 @@ func testAccCheckPublicVirtualInterfaceExists(ctx context.Context, t *testing.T,
 	return testAccCheckVirtualInterfaceExists(ctx, t, name, vif)
 }
 
-func testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
+func testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, connectionID string, vifID *string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceName]
 		if !ok {
 			return fmt.Errorf("Not found: %s", resourceName)
 		}
 
-		if rs.Primary.ID != vifID {
-			return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+		if *vifID == "" {
+			*vifID = rs.Primary.ID
+		} else if rs.Primary.ID != *vifID {
+			return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, *vifID)
 		}
 
 		if aws.ToString(vif.ConnectionId) != connectionID {
