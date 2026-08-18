@@ -231,7 +231,7 @@ func TestAccDirectConnectLag_provisionedConnections(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckLagExists(ctx, t, resourceName, &lag),
 					testAccCheckLagConnectionCount(ctx, t, resourceName, 1),
-					testAccCheckLagConnectionsDeleted(ctx, t, initialConnectionIDs),
+					testAccCheckLagConnectionsDeleted(ctx, t, &initialConnectionIDs),
 					testAccCheckLagConnectionIDs(resourceName, 1, &replacementConnectionIDs),
 					resource.TestCheckResourceAttr(resourceName, "number_of_connections", "1"),
 					resource.TestCheckResourceAttr(resourceName, "connection_ids.#", "1"),
@@ -248,7 +248,7 @@ func TestAccDirectConnectLag_provisionedConnections(t *testing.T) {
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckLagExists(ctx, t, resourceName, &lag),
 					testAccCheckLagConnectionCount(ctx, t, resourceName, 1),
-					testAccCheckLagConnectionsDeleted(ctx, t, replacementConnectionIDs),
+					testAccCheckLagConnectionsDeleted(ctx, t, &replacementConnectionIDs),
 					resource.TestCheckResourceAttr(resourceName, "number_of_connections", "1"),
 					resource.TestCheckResourceAttr(resourceName, "connection_ids.#", "1"),
 					testAccCheckLagChildConnectionTags(ctx, t, resourceName, map[string]string{acctest.CtKey1: acctest.CtValue2}),
@@ -426,14 +426,14 @@ func testAccCheckLagConnectionIDs(name string, expectedCount int, connectionIDs 
 	}
 }
 
-func testAccCheckLagConnectionsDeleted(ctx context.Context, t *testing.T, connectionIDs []string) resource.TestCheckFunc {
+func testAccCheckLagConnectionsDeleted(ctx context.Context, t *testing.T, connectionIDs *[]string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		if len(connectionIDs) == 0 {
+		if len(*connectionIDs) == 0 {
 			return fmt.Errorf("expected at least one managed connection ID to verify deletion")
 		}
 
 		conn := acctest.ProviderMeta(ctx, t).DirectConnectClient(ctx)
-		for _, connectionID := range connectionIDs {
+		for _, connectionID := range *connectionIDs {
 			if connectionID == "" {
 				return fmt.Errorf("cannot verify deletion of an empty managed connection ID")
 			}
@@ -509,13 +509,11 @@ resource "aws_dx_lag" "test" {
 
 func testAccLagConfig_provisionedConnections(rName string, numberOfConnections int, childTagValue string, forceDestroy bool) string {
 	return fmt.Sprintf(`
-data "aws_dx_locations" "test" {}
-
 resource "aws_dx_lag" "test" {
   name                  = %[1]q
   connections_bandwidth = "10Gbps"
   force_destroy         = %[2]t
-  location              = tolist(data.aws_dx_locations.test.location_codes)[0]
+  location              = "EqDC2"
   number_of_connections = %[3]d
 
   child_connection_tags = {
