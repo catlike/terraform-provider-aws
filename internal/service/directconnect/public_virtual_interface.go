@@ -82,7 +82,6 @@ func resourcePublicVirtualInterface() *schema.Resource {
 				names.AttrConnectionID: {
 					Type:     schema.TypeString,
 					Required: true,
-					ForceNew: true,
 				},
 				"customer_address": {
 					Type:     schema.TypeString,
@@ -232,6 +231,16 @@ func resourcePublicVirtualInterfaceUpdate(ctx context.Context, d *schema.Resourc
 	if d.HasChange(names.AttrName) {
 		if _, err := waitVirtualInterfaceNameUpdated(ctx, conn, d.Id(), d.Get(names.AttrName).(string), d.Timeout(schema.TimeoutUpdate)); err != nil {
 			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Public Virtual Interface (%s) name update: %s", d.Id(), err)
+		}
+	}
+
+	if err := virtualInterfaceReassociate(ctx, conn, d); err != nil {
+		return sdkdiag.AppendFromErr(diags, err)
+	}
+
+	if d.HasChange(names.AttrConnectionID) {
+		if _, err := waitPublicVirtualInterfaceAvailable(ctx, conn, d.Id(), d.Timeout(schema.TimeoutUpdate)); err != nil {
+			return sdkdiag.AppendErrorf(diags, "waiting for Direct Connect Public Virtual Interface (%s) reassociation: %s", d.Id(), err)
 		}
 	}
 

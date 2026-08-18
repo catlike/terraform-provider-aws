@@ -72,11 +72,15 @@ func TestAccDirectConnectPublicVirtualInterface_basic(t *testing.T) {
 	})
 }
 
-func TestResourcePublicVirtualInterface_schemaNameNotForceNew(t *testing.T) {
+func TestResourcePublicVirtualInterface_schemaNameAndConnectionIDNotForceNew(t *testing.T) {
 	t.Parallel()
 
-	if tfdirectconnect.ResourcePublicVirtualInterface().SchemaFunc()[names.AttrName].ForceNew {
-		t.Errorf("name schema ForceNew = true, want false")
+	schema := tfdirectconnect.ResourcePublicVirtualInterface().SchemaFunc()
+
+	for _, attributeName := range []string{names.AttrName, names.AttrConnectionID} {
+		if schema[attributeName].ForceNew {
+			t.Errorf("%s schema ForceNew = true, want false", attributeName)
+		}
 	}
 }
 
@@ -137,6 +141,90 @@ func TestAccDirectConnectPublicVirtualInterface_name(t *testing.T) {
 
 						return nil
 					},
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestAccDirectConnectPublicVirtualInterface_reassociation(t *testing.T) {
+	ctx := acctest.Context(t)
+	if testing.Short() {
+		t.Skip("skipping long-running test in short mode")
+	}
+
+	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
+	targetConnectionID := acctest.SkipIfEnvVarNotSet(t, "DX_TARGET_CONNECTION_ID")
+	if connectionID == targetConnectionID {
+		t.Fatal("DX_CONNECTION_ID and DX_TARGET_CONNECTION_ID must differ")
+	}
+
+	var (
+		vif   awstypes.VirtualInterface
+		vifID string
+	)
+	resourceName := "aws_dx_public_virtual_interface.test"
+	rName := fmt.Sprintf("tf-testacc-public-vif-%s", acctest.RandString(t, 9))
+	amazonAddress := "146.112.128.1/30"
+	customerAddress := "146.112.128.2/30"
+	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
+	vlan := acctest.RandIntRange(t, 2049, 4094)
+
+	acctest.ParallelTest(ctx, t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckPublicVirtualInterfaceDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccPublicVirtualInterfaceConfig_reassociation(connectionID, rName, amazonAddress, customerAddress, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						vifID = rs.Primary.ID
+						if aws.ToString(vif.ConnectionId) != connectionID {
+							return fmt.Errorf("remote connection ID = %s, want %s", aws.ToString(vif.ConnectionId), connectionID)
+						}
+
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccPublicVirtualInterfaceConfig_reassociation(targetConnectionID, rName, amazonAddress, customerAddress, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, targetConnectionID),
+					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, vifID, targetConnectionID, &vif),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				Config: testAccPublicVirtualInterfaceConfig_reassociation(connectionID, rName, amazonAddress, customerAddress, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
+					testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID, &vif),
 				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -238,6 +326,25 @@ func testAccCheckPublicVirtualInterfaceExists(ctx context.Context, t *testing.T,
 	return testAccCheckVirtualInterfaceExists(ctx, t, name, vif)
 }
 
+func testAccCheckPublicVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("Not found: %s", resourceName)
+		}
+
+		if rs.Primary.ID != vifID {
+			return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+		}
+
+		if aws.ToString(vif.ConnectionId) != connectionID {
+			return fmt.Errorf("remote connection ID = %s, want %s", aws.ToString(vif.ConnectionId), connectionID)
+		}
+
+		return nil
+	}
+}
+
 func testAccPublicVirtualInterfaceConfig_basic(cid, rName, amzAddr, custAddr string, bgpAsn, vlan int) string {
 	return fmt.Sprintf(`
 resource "aws_dx_public_virtual_interface" "test" {
@@ -255,6 +362,25 @@ resource "aws_dx_public_virtual_interface" "test" {
   ]
 }
 `, cid, rName, amzAddr, custAddr, bgpAsn, vlan)
+}
+
+func testAccPublicVirtualInterfaceConfig_reassociation(cid, vifName, amzAddr, custAddr string, bgpAsn, vlan int) string {
+	return fmt.Sprintf(`
+resource "aws_dx_public_virtual_interface" "test" {
+  address_family   = "ipv4"
+  amazon_address   = %[3]q
+  bgp_asn          = %[5]d
+  connection_id    = %[1]q
+  customer_address = %[4]q
+  name             = %[2]q
+  vlan             = %[6]d
+
+  route_filter_prefixes = [
+    "146.112.128.0/24",
+    "209.165.200.0/24",
+  ]
+}
+`, cid, vifName, amzAddr, custAddr, bgpAsn, vlan)
 }
 
 func testAccPublicVirtualInterfaceConfig_name(cid, vifName, amzAddr, custAddr string, bgpAsn, vlan int) string {

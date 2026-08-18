@@ -38,7 +38,7 @@ This resource supports the following arguments:
 * `region` - (Optional) Region where this resource will be [managed](https://docs.aws.amazon.com/general/latest/gr/rande.html#regional-endpoints). Defaults to the Region set in the [provider configuration](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#aws-configuration-reference).
 * `address_family` - (Required) The address family for the BGP peer. `ipv4 ` or `ipv6`.
 * `bgp_asn` - (Required) The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
-* `connection_id` - (Required) The ID of the Direct Connect connection (or LAG) on which to create the virtual interface.
+* `connection_id` - (Required) ID of the Direct Connect connection or LAG hosting the virtual interface. Updating this argument moves the existing virtual interface without changing its ID. The Direct Connect API requester must own the target connection or LAG and either the virtual interface or its current connection. The target must be available and have no virtual interface with a conflicting VLAN or IP address; AWS compatibility and quota checks must also pass. The move interrupts connectivity and can recreate BGP peers. A virtual interface on a hosted connection cannot be moved to a LAG. Following a move, `available`, `down`, and `verifying` are valid stable virtual interface states.
 * `name` - (Required) Name for the virtual interface. Updating this argument performs an in-place update.
 * `vlan` - (Required) The VLAN ID.
 * `amazon_address` - (Optional) The IPv4 CIDR address to use to send traffic to Amazon. Required for IPv4 BGP peers.
