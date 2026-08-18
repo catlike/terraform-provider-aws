@@ -26,6 +26,7 @@ func TestAccDirectConnectTransitVirtualInterface_serial(t *testing.T) {
 	testCases := map[string]func(t *testing.T){
 		acctest.CtBasic: testAccTransitVirtualInterface_basic,
 		acctest.CtName:  testAccTransitVirtualInterface_name,
+		"reassociation": testAccTransitVirtualInterface_reassociation,
 		"tags":          testAccTransitVirtualInterface_tags,
 		"sitelink":      testAccTransitVirtualInterface_siteLink,
 	}
@@ -39,6 +40,89 @@ func TestResourceTransitVirtualInterface_schemaNameNotForceNew(t *testing.T) {
 	if tfdirectconnect.ResourceTransitVirtualInterface().SchemaFunc()[names.AttrName].ForceNew {
 		t.Errorf("name schema ForceNew = true, want false")
 	}
+}
+
+func testAccTransitVirtualInterface_reassociation(t *testing.T) {
+	ctx := acctest.Context(t)
+	if testing.Short() {
+		t.Skip("skipping long-running test in short mode")
+	}
+
+	connectionID := acctest.SkipIfEnvVarNotSet(t, "DX_CONNECTION_ID")
+	targetConnectionID := acctest.SkipIfEnvVarNotSet(t, "DX_TARGET_CONNECTION_ID")
+	if connectionID == targetConnectionID {
+		t.Fatal("DX_CONNECTION_ID and DX_TARGET_CONNECTION_ID must differ")
+	}
+
+	var (
+		vif   awstypes.VirtualInterface
+		vifID string
+	)
+	resourceName := "aws_dx_transit_virtual_interface.test"
+	rName := fmt.Sprintf("tf-testacc-transit-vif-%s", acctest.RandString(t, 9))
+	amzAsn := acctest.RandIntRange(t, 64512, 65534)
+	bgpAsn := acctest.RandIntRange(t, 64512, 65534)
+	vlan := acctest.RandIntRange(t, 2049, 4094)
+
+	acctest.Test(ctx, t, resource.TestCase{
+		PreCheck:                 func() { acctest.PreCheck(ctx, t) },
+		ErrorCheck:               acctest.ErrorCheck(t, names.DirectConnectServiceID),
+		ProtoV5ProviderFactories: acctest.ProtoV5ProviderFactories,
+		CheckDestroy:             testAccCheckTransitVirtualInterfaceDestroy(ctx, t),
+		Steps: []resource.TestStep{
+			{
+				Config: testAccTransitVirtualInterfaceConfig_basic(connectionID, rName, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
+					func(s *terraform.State) error {
+						rs, ok := s.RootModule().Resources[resourceName]
+						if !ok {
+							return fmt.Errorf("Not found: %s", resourceName)
+						}
+
+						vifID = rs.Primary.ID
+						if aws.ToString(vif.ConnectionId) != connectionID {
+							return fmt.Errorf("remote connection ID = %s, want %s", aws.ToString(vif.ConnectionId), connectionID)
+						}
+
+						return nil
+					},
+				),
+			},
+			{
+				Config: testAccTransitVirtualInterfaceConfig_basic(targetConnectionID, rName, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, targetConnectionID),
+					testAccCheckTransitVirtualInterfaceIDAndConnection(resourceName, vifID, targetConnectionID, &vif),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				Config: testAccTransitVirtualInterfaceConfig_basic(connectionID, rName, amzAsn, bgpAsn, vlan),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckTransitVirtualInterfaceExists(ctx, t, resourceName, &vif),
+					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
+					testAccCheckTransitVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID, &vif),
+				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(resourceName, plancheck.ResourceActionUpdate),
+					},
+				},
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
 }
 
 func testAccTransitVirtualInterface_name(t *testing.T) {
@@ -330,6 +414,25 @@ func testAccTransitVirtualInterface_siteLink(t *testing.T) {
 
 func testAccCheckTransitVirtualInterfaceExists(ctx context.Context, t *testing.T, name string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
 	return testAccCheckVirtualInterfaceExists(ctx, t, name, vif)
+}
+
+func testAccCheckTransitVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("Not found: %s", resourceName)
+		}
+
+		if rs.Primary.ID != vifID {
+			return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+		}
+
+		if aws.ToString(vif.ConnectionId) != connectionID {
+			return fmt.Errorf("remote connection ID = %s, want %s", aws.ToString(vif.ConnectionId), connectionID)
+		}
+
+		return nil
+	}
 }
 
 func testAccCheckTransitVirtualInterfaceDestroy(ctx context.Context, t *testing.T) resource.TestCheckFunc {
