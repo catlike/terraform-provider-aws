@@ -489,17 +489,10 @@ func testAccCheckConnectionNoDestroy(ctx context.Context, t *testing.T) resource
 
 func testAccConnectionConfig_basic(rName string) string {
 	return fmt.Sprintf(`
-data "aws_dx_locations" "test" {}
-
-locals {
-  location_codes = tolist(data.aws_dx_locations.test.location_codes)
-  idx            = min(2, length(local.location_codes) - 1)
-}
-
 resource "aws_dx_connection" "test" {
   name      = %[1]q
   bandwidth = "1Gbps"
-  location  = local.location_codes[local.idx]
+  location  = "EqDC2"
 }
 `, rName)
 }
