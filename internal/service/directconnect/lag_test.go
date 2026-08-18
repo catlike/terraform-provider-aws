@@ -313,12 +313,10 @@ func testAccCheckLagOperationalFields(name string, lag *awstypes.Lag) resource.T
 
 func testAccLagConfig_basic(rName string) string {
 	return fmt.Sprintf(`
-data "aws_dx_locations" "test" {}
-
 resource "aws_dx_lag" "test" {
   name                  = %[1]q
   connections_bandwidth = "10Gbps"
-  location              = tolist(data.aws_dx_locations.test.location_codes)[0]
+  location              = "EqDC2"
 }
 `, rName)
 }
