@@ -149,7 +149,7 @@ func TestAccDirectConnectHostedPublicVirtualInterface_reassociation(t *testing.T
 					testAccCheckHostedPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
 					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, targetConnectionID),
 					accepterAssociationChecks,
-					testAccCheckHostedPublicVirtualInterfaceIDAndConnection(resourceName, vifID, targetConnectionID, &vif),
+					testAccCheckHostedPublicVirtualInterfaceIDAndConnection(resourceName, targetConnectionID, &vifID, &vif),
 				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -163,7 +163,7 @@ func TestAccDirectConnectHostedPublicVirtualInterface_reassociation(t *testing.T
 					testAccCheckHostedPublicVirtualInterfaceExists(ctx, t, resourceName, &vif),
 					resource.TestCheckResourceAttr(resourceName, names.AttrConnectionID, connectionID),
 					accepterAssociationChecks,
-					testAccCheckHostedPublicVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID, &vif),
+					testAccCheckHostedPublicVirtualInterfaceIDAndConnection(resourceName, connectionID, &vifID, &vif),
 				),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
@@ -381,15 +381,15 @@ func testAccCheckHostedPublicVirtualInterfaceState(vif *awstypes.VirtualInterfac
 	}
 }
 
-func testAccCheckHostedPublicVirtualInterfaceIDAndConnection(resourceName, vifID, connectionID string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
+func testAccCheckHostedPublicVirtualInterfaceIDAndConnection(resourceName, connectionID string, vifID *string, vif *awstypes.VirtualInterface) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceName]
 		if !ok {
 			return fmt.Errorf("Not found: %s", resourceName)
 		}
 
-		if rs.Primary.ID != vifID {
-			return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, vifID)
+		if rs.Primary.ID != *vifID {
+			return fmt.Errorf("Virtual Interface ID = %s, want %s", rs.Primary.ID, *vifID)
 		}
 
 		if aws.ToString(vif.ConnectionId) != connectionID {
